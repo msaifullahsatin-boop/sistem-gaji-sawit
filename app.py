@@ -311,10 +311,10 @@ elif page == "📝 Kemasukan Data Baru":
                 st.success(f"Data untuk {bulan_tahun} telah berjaya diproses DAN DISIMPAN ke database!")
                 
                 st.subheader("Rumusan Kiraan")
-                st.metric("Jumlah Jualan Kasar", f"RM{data_kiraan['jumlah_hasil_jualan']:.2f}")
-                st.metric("Gaji Pekerja 1 (Lori)", f"RM{data_kiraan['gaji_lori']:.2f}")
-                st.metric("Gaji Pekerja 2 (Penumbak)", f"RM{data_kiraan['gaji_penumbak']:.2f}")
-                st.metric("Bahagian Pemilik", f"RM{data_kiraan['bahagian_pemilik']:.2f}")
+                st.metric("Jumlah Jualan Bersih", f"RM{data_kiraan['jumlah_hasil_jualan']:.2f}")
+                st.metric("Bayaran Pengangkutan Sawit (Lori)", f"RM{data_kiraan['gaji_lori']:.2f}")
+                st.metric("Bayaran (Penumbak Sawit)", f"RM{data_kiraan['gaji_penumbak']:.2f}")
+                st.metric("Bahagian Pemilik Ladang", f"RM{data_kiraan['bahagian_pemilik']:.2f}")
                 
                 st.subheader("Muat Turun")
                 nama_fail_pdf = f"Laporan_Gaji_{bulan_tahun.replace(' ', '_')}.pdf"
@@ -324,4 +324,5 @@ elif page == "📝 Kemasukan Data Baru":
                     file_name=nama_fail_pdf,
                     mime="application/pdf"
                 )
+
 

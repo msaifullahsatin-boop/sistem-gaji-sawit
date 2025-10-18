@@ -7,8 +7,7 @@ import io
 import plotly.express as px
 from supabase import create_client, Client
 
-# --- FUNGSI-FUNGSI LOGIK ---
-
+# --- FUNGSI-FUNGSI LOGIK (Tiada Perubahan) ---
 def kira_payroll(senarai_resit, total_kos):
     KADAR_LORI_PER_KG = 0.07
     jumlah_hasil_jualan = sum(resit['Hasil_RM'] for resit in senarai_resit)
@@ -45,12 +44,18 @@ def jana_pdf_binary(bulan_tahun, senarai_resit, data_kiraan):
     pdf.cell(0, 10, "Bahagian 1: Butiran Jualan (Resit)", ln=True)
     pdf.set_font("Helvetica", size=11)
     for i, resit in enumerate(senarai_resit):
-        teks_resit = f"  Resit #{i+1} (Gred {resit['Gred']}): {resit['Berat_kg']:.2f} kg @ RM{resit['Harga_RM_per_MT']:.2f}/MT = RM{resit['Hasil_RM']:.2f}"
+        # Semak jika 'Gred' wujud, jika tidak, sediakan nilai default
+        gred = resit.get('Gred', 'N/A')
+        berat_kg = resit.get('Berat_kg', 0)
+        harga_per_mt = resit.get('Harga_RM_per_MT', 0)
+        hasil_resit = resit.get('Hasil_RM', 0)
+        
+        teks_resit = f"  Resit #{i+1} (Gred {gred}): {berat_kg:.2f} kg @ RM{harga_per_mt:.2f}/MT = RM{hasil_resit:.2f}"
         pdf.cell(0, 8, teks_resit, ln=True)
     pdf.ln(5)
     pdf.set_font("Helvetica", 'B', 11)
-    pdf.cell(0, 8, f"Jumlah Berat Keseluruhan: {data_kiraan['jumlah_berat_kg']:.2f} kg", ln=True)
-    pdf.cell(0, 8, f"Jumlah Hasil Jualan Kasar: RM{data_kiraan['jumlah_hasil_jualan']:.2f}", ln=True)
+    pdf.cell(0, 8, f"Jumlah Berat Keseluruhan: {data_kiraan.get('jumlah_berat_kg', 0):.2f} kg", ln=True)
+    pdf.cell(0, 8, f"Jumlah Hasil Jualan Kasar: RM{data_kiraan.get('jumlah_hasil_jualan', 0):.2f}", ln=True)
     pdf.ln(10)
 
     # Bahagian 2: Kiraan Gaji
@@ -61,35 +66,35 @@ def jana_pdf_binary(bulan_tahun, senarai_resit, data_kiraan):
     pdf.set_font("Helvetica", 'BU', 11)
     pdf.cell(0, 8, "Gaji Pekerja 1 (Lori):", ln=True)
     pdf.set_font("Helvetica", size=11)
-    pdf.cell(0, 8, f"  Kiraan: {data_kiraan['jumlah_berat_kg']:.2f} kg x RM{data_kiraan['kadar_lori_per_kg']:.2f}/kg", ln=True)
+    pdf.cell(0, 8, f"  Kiraan: {data_kiraan.get('jumlah_berat_kg', 0):.2f} kg x RM{data_kiraan.get('kadar_lori_per_kg', 0.07):.2f}/kg", ln=True)
     pdf.set_font("Helvetica", 'B', 11)
-    pdf.cell(0, 8, f"  Jumlah Gaji Lori = RM{data_kiraan['gaji_lori']:.2f}", ln=True)
+    pdf.cell(0, 8, f"  Jumlah Gaji Lori = RM{data_kiraan.get('gaji_lori', 0):.2f}", ln=True)
     pdf.ln(5)
 
     # Kos Operasi
     pdf.set_font("Helvetica", 'BU', 11)
     pdf.cell(0, 8, "Kos Operasi Bulanan (Baja, Racun, dll):", ln=True)
     pdf.set_font("Helvetica", 'B', 11)
-    pdf.cell(0, 8, f"  Jumlah Kos Operasi = RM{data_kiraan['total_kos_operasi']:.2f}", ln=True)
+    pdf.cell(0, 8, f"  Jumlah Kos Operasi = RM{data_kiraan.get('total_kos_operasi', 0):.2f}", ln=True)
     pdf.ln(5)
 
     # Baki Bersih
     pdf.set_font("Helvetica", 'BU', 11)
     pdf.cell(0, 8, "Hasil Bersih (Untuk Dibahagi):", ln=True)
     pdf.set_font("Helvetica", size=11)
-    pdf.cell(0, 8, f"  Kiraan: RM{data_kiraan['jumlah_hasil_jualan']:.2f} (Jualan) - RM{data_kiraan['gaji_lori']:.2f} (Lori) - RM{data_kiraan['total_kos_operasi']:.2f} (Kos Operasi)", ln=True)
+    pdf.cell(0, 8, f"  Kiraan: RM{data_kiraan.get('jumlah_hasil_jualan', 0):.2f} (Jualan) - RM{data_kiraan.get('gaji_lori', 0):.2f} (Lori) - RM{data_kiraan.get('total_kos_operasi', 0):.2f} (Kos Operasi)", ln=True)
     pdf.set_font("Helvetica", 'B', 11)
-    pdf.cell(0, 8, f"  Hasil Bersih = RM{data_kiraan['baki_bersih']:.2f}", ln=True)
+    pdf.cell(0, 8, f"  Hasil Bersih = RM{data_kiraan.get('baki_bersih', 0):.2f}", ln=True)
     pdf.ln(5)
 
     # Pembahagian 50/50
     pdf.set_font("Helvetica", 'BU', 11)
     pdf.cell(0, 8, "Pembahagian Hasil Bersih (50/50):", ln=True)
     pdf.set_font("Helvetica", size=11)
-    pdf.cell(0, 8, f"  Kiraan: RM{data_kiraan['baki_bersih']:.2f} / 2", ln=True)
+    pdf.cell(0, 8, f"  Kiraan: RM{data_kiraan.get('baki_bersih', 0):.2f} / 2", ln=True)
     pdf.set_font("Helvetica", 'B', 11)
-    pdf.cell(0, 8, f"  Gaji Pekerja 2 (Penumbak) = RM{data_kiraan['gaji_penumbak']:.2f}", ln=True)
-    pdf.cell(0, 8, f"  Bahagian Pemilik Ladang = RM{data_kiraan['bahagian_pemilik']:.2f}", ln=True)
+    pdf.cell(0, 8, f"  Gaji Pekerja 2 (Penumbak) = RM{data_kiraan.get('gaji_penumbak', 0):.2f}", ln=True)
+    pdf.cell(0, 8, f"  Bahagian Pemilik Ladang = RM{data_kiraan.get('bahagian_pemilik', 0):.2f}", ln=True)
     pdf.ln(15)
     
     # Footer
@@ -173,9 +178,9 @@ df_gaji, df_jualan, df_kos = muat_data()
 st.title("Sistem Pengurusan Ladang Sawit 🧑‍🌾")
 
 st.sidebar.title("Navigasi")
-# --- UBAHSUAI 3: Tambah halaman 'Urus Data' ---
-page = st.sidebar.radio("Pilih Halaman:", ["📊 Dashboard Statistik", "📝 Kemasukan Data Baru", "❌ Urus Data"])
-# --- TAMAT UBAHSUAI 3 ---
+# --- UBAHSUAI 4: Tukar nama halaman ---
+page = st.sidebar.radio("Pilih Halaman:", ["📊 Dashboard Statistik", "📝 Kemasukan Data Baru", "🖨️ Urus & Cetak Semula"])
+# --- TAMAT UBAHSUAI 4 ---
 
 if st.sidebar.button("Segarkan Semula Data (Refresh)"):
     st.cache_data.clear()
@@ -213,7 +218,6 @@ if page == "📊 Dashboard Statistik":
         st.subheader("Tren Jualan, Kos, dan Pembahagian Gaji")
         df_gaji_sorted = df_gaji_paparan.copy()
         
-        # Sediakan kolum kos jika tiada
         if 'total_kos_operasi' not in df_gaji_sorted.columns:
             df_gaji_sorted['total_kos_operasi'] = 0.0
         
@@ -452,32 +456,67 @@ elif page == "📝 Kemasukan Data Baru":
                     mime="application/pdf"
                 )
 
-# --- UBAHSUAI 3: Halaman Baru 'Urus Data' ---
-elif page == "❌ Urus Data":
-    st.header("❌ Urus Data")
-    st.warning("AMARAN: Tindakan ini akan memadam data secara kekal dari database.")
+# --- UBAHSUAI 4: Halaman 'Urus & Cetak Semula' ---
+elif page == "🖨️ Urus & Cetak Semula":
+    st.header("🖨️ Urus & Cetak Semula Laporan")
     
     if df_gaji.empty:
-        st.info("Tiada data untuk dipadam.")
+        st.info("Tiada data untuk diurus atau dicetak.")
     else:
         # Dapatkan senarai bulan yang unik dari data gaji
         senarai_bulan_rekod = df_gaji['BulanTahun'].unique()
         
+        # --- BAHAGIAN 1: CETAK SEMULA PDF ---
+        st.subheader("Cetak Semula Laporan PDF Bulanan")
+        with st.form("borang_cetak_semula"):
+            bulan_cetak = st.selectbox("Pilih Bulan untuk Dicetak:", senarai_bulan_rekod)
+            submit_cetak = st.form_submit_button("Jana PDF")
+
+        if submit_cetak:
+            with st.spinner(f"Menjana PDF untuk {bulan_cetak}..."):
+                # 1. Dapatkan data untuk bulan yang dipilih
+                data_gaji_bulan_ini = df_gaji[df_gaji['BulanTahun'] == bulan_cetak].to_dict('records')[0]
+                senarai_resit = df_jualan[df_jualan['BulanTahun'] == bulan_cetak].to_dict('records')
+                
+                # 2. Susun semula data untuk fungsi 'jana_pdf_binary'
+                data_kiraan_cetak = {
+                    'jumlah_hasil_jualan': data_gaji_bulan_ini['JumlahJualan_RM'],
+                    'jumlah_berat_kg': data_gaji_bulan_ini['JumlahBerat_kg'],
+                    'gaji_lori': data_gaji_bulan_ini['GajiLori_RM'],
+                    'total_kos_operasi': data_gaji_bulan_ini.get('total_kos_operasi', 0.0),
+                    'kadar_lori_per_kg': 0.07, # Nilai statik untuk teks PDF
+                    'baki_bersih': data_gaji_bulan_ini['GajiPenumbak_RM'] + data_gaji_bulan_ini['BahagianPemilik_RM'],
+                    'gaji_penumbak': data_gaji_bulan_ini['GajiPenumbak_RM'],
+                    'bahagian_pemilik': data_gaji_bulan_ini['BahagianPemilik_RM']
+                }
+                
+                # 3. Jana PDF
+                pdf_binary = jana_pdf_binary(bulan_cetak, senarai_resit, data_kiraan_cetak)
+                
+                # 4. Sediakan butang muat turun
+                nama_fail_pdf = f"Laporan_Gaji_{bulan_cetak.replace(' ', '_')}.pdf"
+                st.download_button(
+                    label=f"Muat Turun Laporan PDF untuk {bulan_cetak}",
+                    data=pdf_binary,
+                    file_name=nama_fail_pdf,
+                    mime="application/pdf"
+                )
+        
+        st.divider() # Garisan pemisah
+        
+        # --- BAHAGIAN 2: PADAM DATA ---
+        st.subheader("❌ Padam Data Bulanan")
+        st.warning("AMARAN: Tindakan ini akan memadam data secara kekal dari database.")
+        
         with st.form("borang_padam_data"):
-            st.subheader("Pilih Data Bulanan Untuk Dipadam")
-            
-            # Cipta dropdown dari senarai bulan yang ada
-            bulan_dipilih = st.selectbox("Pilih Bulan dan Tahun:", senarai_bulan_rekod)
+            # Guna senarai bulan yang sama
+            bulan_dipilih = st.selectbox("Pilih Bulan dan Tahun untuk Dipadam:", senarai_bulan_rekod, key="padam_bulan")
             
             st.subheader("Pengesahan")
             st.info(f"Anda akan memadam SEMUA data Jualan, Kos, dan Gaji untuk **{bulan_dipilih}**.")
-            
-            # Tambah kotak semak untuk keselamatan tambahan
             pengesahan = st.checkbox("Saya faham dan ingin teruskan.")
-            
             submit_button_padam = st.form_submit_button(label="Padam Data Bulan Ini Secara Kekal")
 
-        # Logik selepas borang 'Padam' dihantar
         if submit_button_padam:
             if not pengesahan:
                 st.error("Ralat: Sila tandakan kotak pengesahan untuk meneruskan.")
@@ -486,19 +525,13 @@ elif page == "❌ Urus Data":
             else:
                 with st.spinner(f"Memadam semua data untuk {bulan_dipilih}..."):
                     try:
-                        # Padam dari 'rekod_gaji'
                         supabase.table('rekod_gaji').delete().eq('BulanTahun', bulan_dipilih).execute()
-                        
-                        # Padam dari 'rekod_jualan'
                         supabase.table('rekod_jualan').delete().eq('BulanTahun', bulan_dipilih).execute()
-                        
-                        # Padam dari 'rekod_kos'
                         supabase.table('rekod_kos').delete().eq('BulanTahun', bulan_dipilih).execute()
                         
-                        # Kosongkan cache dan 'rerun'
                         st.cache_data.clear()
                         st.success(f"Semua data untuk {bulan_dipilih} telah berjaya dipadam.")
-                        st.rerun() # 'Rerun' untuk 'refresh' senarai dropdown dan dashboard
+                        st.rerun()
                         
                     except Exception as e:
                         st.error(f"RALAT: Gagal memadam data. {e}")

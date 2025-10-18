@@ -7,7 +7,8 @@ import io
 import plotly.express as px
 from supabase import create_client, Client
 
-# --- FUNGSI-FUNGSI LOGIK (Tiada Perubahan) ---
+# --- FUNGSI-FUNGSI LOGIK ---
+
 def kira_payroll(senarai_resit, total_kos):
     KADAR_LORI_PER_KG = 0.07
     jumlah_hasil_jualan = sum(resit['Hasil_RM'] for resit in senarai_resit)
@@ -44,7 +45,6 @@ def jana_pdf_binary(bulan_tahun, senarai_resit, data_kiraan):
     pdf.cell(0, 10, "Bahagian 1: Butiran Jualan (Resit)", ln=True)
     pdf.set_font("Helvetica", size=11)
     for i, resit in enumerate(senarai_resit):
-        # Semak jika 'Gred' wujud, jika tidak, sediakan nilai default
         gred = resit.get('Gred', 'N/A')
         berat_kg = resit.get('Berat_kg', 0)
         harga_per_mt = resit.get('Harga_RM_per_MT', 0)
@@ -178,9 +178,7 @@ df_gaji, df_jualan, df_kos = muat_data()
 st.title("Sistem Pengurusan Ladang Sawit 🧑‍🌾")
 
 st.sidebar.title("Navigasi")
-# --- UBAHSUAI 4: Tukar nama halaman ---
 page = st.sidebar.radio("Pilih Halaman:", ["📊 Dashboard Statistik", "📝 Kemasukan Data Baru", "🖨️ Urus & Cetak Semula"])
-# --- TAMAT UBAHSUAI 4 ---
 
 if st.sidebar.button("Segarkan Semula Data (Refresh)"):
     st.cache_data.clear()
@@ -214,7 +212,7 @@ if page == "📊 Dashboard Statistik":
         col3.metric("Purata Pendapatan Bulanan (Pemilik)", f"RM{avg_monthly_owner:,.2f}")
         st.markdown("---")
         
-        # Graf Tren
+        # --- BLOK PENGISIHAN BARU (TELAH DIBAIKI) ---
         st.subheader("Tren Jualan, Kos, dan Pembahagian Gaji")
         df_gaji_sorted = df_gaji_paparan.copy()
         
@@ -222,15 +220,31 @@ if page == "📊 Dashboard Statistik":
             df_gaji_sorted['total_kos_operasi'] = 0.0
         
         try:
-            df_gaji_sorted['TarikhSort'] = pd.to_datetime(df_gaji_sorted['BulanTahun'], format='%B %Y', errors='coerce')
-            if df_gaji_sorted['TarikhSort'].isnull().all(): 
-                df_gaji_sorted['TarikhSort'] = pd.to_datetime(df_gaji_sorted['BulanTahun'], errors='coerce')
-            df_gaji_sorted = df_gaji_sorted.sort_values('TarikhSort')
-        except Exception:
+            # 1. Cipta pemetaan (mapping) bulan
+            peta_bulan = {
+                "Januari": 1, "Februari": 2, "Mac": 3, "April": 4, "Mei": 5, "Jun": 6,
+                "Julai": 7, "Ogos": 8, "September": 9, "Oktober": 10, "November": 11, "Disember": 12
+            }
+            
+            # 2. Asingkan 'BulanTahun' kepada kolum baru (cth: "Ogos 2025" -> "Ogos" dan "2025")
+            df_split = df_gaji_sorted['BulanTahun'].str.split(' ', expand=True)
+            df_gaji_sorted['BulanString'] = df_split[0]
+            df_gaji_sorted['Tahun'] = df_split[1].astype(int)
+            
+            # 3. Tukar nama bulan (string) kepada nombor
+            df_gaji_sorted['BulanNombor'] = df_gaji_sorted['BulanString'].map(peta_bulan)
+            
+            # 4. Isih (Sort) mengikut Tahun, kemudian BulanNombor
+            df_gaji_sorted = df_gaji_sorted.sort_values(by=['Tahun', 'BulanNombor'])
+            
+        except Exception as e:
+            # Jika gagal (cth: data lama ada format lain), guna susunan asal
+            st.warning(f"Ralat semasa mengisih graf: {e}. Graf mungkin tidak teratur.")
             pass 
+        # --- TAMAT BLOK PENGISIHAN BARU ---
             
         fig_tren_gaji = px.line(
-            df_gaji_sorted, 
+            df_gaji_sorted, # Gunakan dataframe yang telah diisih
             x='BulanTahun', 
             y=['JumlahJualan_RM', 'total_kos_operasi', 'GajiLori_RM', 'GajiPenumbak_RM', 'BahagianPemilik_RM'],
             title="Perbandingan Jualan, Kos, dan Pembahagian Gaji",
@@ -277,7 +291,7 @@ elif page == "📝 Kemasukan Data Baru":
 
     # --- TAB 1: Borang Jualan dan Gaji ---
     with tab_jualan:
-        st.subheader("Borang Kiraan Bayaran")
+        st.subheader("Borang Kiraan Gaji")
         with st.form("borang_data_gaji"):
             
             st.subheader("A. Maklumat Asas")
@@ -456,7 +470,7 @@ elif page == "📝 Kemasukan Data Baru":
                     mime="application/pdf"
                 )
 
-# --- UBAHSUAI 4: Halaman 'Urus & Cetak Semula' ---
+# --- Halaman 3: Urus & Cetak Semula ---
 elif page == "🖨️ Urus & Cetak Semula":
     st.header("🖨️ Urus & Cetak Semula Laporan")
     
@@ -484,7 +498,7 @@ elif page == "🖨️ Urus & Cetak Semula":
                     'jumlah_berat_kg': data_gaji_bulan_ini['JumlahBerat_kg'],
                     'gaji_lori': data_gaji_bulan_ini['GajiLori_RM'],
                     'total_kos_operasi': data_gaji_bulan_ini.get('total_kos_operasi', 0.0),
-                    'kadar_lori_per_kg': 0.07, # Nilai statik untuk teks PDF
+                    'kadar_lori_per_kg': 0.07, 
                     'baki_bersih': data_gaji_bulan_ini['GajiPenumbak_RM'] + data_gaji_bulan_ini['BahagianPemilik_RM'],
                     'gaji_penumbak': data_gaji_bulan_ini['GajiPenumbak_RM'],
                     'bahagian_pemilik': data_gaji_bulan_ini['BahagianPemilik_RM']
@@ -535,4 +549,3 @@ elif page == "🖨️ Urus & Cetak Semula":
                         
                     except Exception as e:
                         st.error(f"RALAT: Gagal memadam data. {e}")
-

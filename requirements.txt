@@ -2,4 +2,5 @@ streamlit
 pandas
 fpdf2
 plotly
-supabase-py
+supabase
+

@@ -89,35 +89,57 @@ def jana_pdf_binary(bulan_tahun, senarai_resit, data_kiraan):
 # ----------------------------------
 st.set_page_config(layout="wide", page_title="Sistem Gaji Sawit")
 
-# --- 1. BAHAGIAN LOG MASUK & KESELAMATAN ---
+# --- 1. BAHAGIAN LOG MASUK & KESELAMATAN (TELAH DIUBAH SUAI) ---
 def check_password():
     """Returns True if user has entered the correct password."""
     
-    # 1. Semak jika pengguna sudah log masuk (guna session state)
     if "logged_in" in st.session_state and st.session_state["logged_in"] == True:
         return True
 
-    # 2. Jika belum, tunjukkan borang log masuk
     try:
-        # Ambil kata laluan sebenar dari Streamlit Secrets
+        # Cuba akses kunci seperti biasa
         correct_password = st.secrets["APP_PASSWORD"]
+        
+    except KeyError:
+        # --- BLOK DEBUG ---
+        # JIKA GAGAL, ini bermakna kunci itu tiada.
+        st.error("RALAT: Kunci 'APP_PASSWORD' tidak ditemui dalam Secrets!")
+        st.subheader("Mod Debug: Kunci 'Secrets' Yang Dikesan")
+        
+        try:
+            # st.secrets berkelakuan seperti 'dictionary'. Mari kita lihat semua kuncinya.
+            available_keys = list(st.secrets.keys())
+            st.write("Senarai kunci yang wujud:")
+            st.write(available_keys)
+            
+            if "supabase" in available_keys:
+                st.write("Kunci di dalam 'supabase':")
+                st.write(list(st.secrets["supabase"].keys()))
+            
+            st.warning("PENTING: Pastikan 'APP_PASSWORD' (huruf besar) wujud dalam senarai 'Secrets' anda dan TIDAK berada di dalam 'supabase'.")
+        
+        except Exception as e:
+            st.error(f"Ralat tambahan semasa cuba menyenaraikan kunci: {e}")
+            
+        return False # Hentikan fungsi di sini
+        # --- TAMAT BLOK DEBUG ---
+        
     except Exception as e:
-        st.error("Ralat: Rahsia 'APP_PASSWORD' belum ditetapkan. Sila hubungi admin.")
-        st.exception(e)
+        # Tangkap ralat lain
+        st.error(f"Ralat tidak dijangka semasa membaca 'secrets': {e}")
         return False
 
+    # --- BORANG LOG MASUK (jika kunci wujud) ---
     st.warning("🔒 Sila masukkan kata laluan untuk mengakses aplikasi ini.")
     password = st.text_input("Kata Laluan:", type="password")
 
     if st.button("Log Masuk"):
         if password == correct_password:
-            # Jika betul, simpan dalam session state dan 'rerun'
             st.session_state["logged_in"] = True
             st.rerun()
         else:
             st.error("Kata laluan salah.")
     
-    # Jangan benarkan akses jika belum log masuk
     return False
 
 # --- PANGGIL FUNGSI LOG MASUK DI SINI ---
@@ -125,13 +147,12 @@ if not check_password():
     st.stop() # Hentikan aplikasi jika log masuk gagal
 
 # --- 2. SAMBUNGAN KE SUPABASE ---
-# Kod ini hanya akan berjalan jika log masuk BERJAYA
 try:
     url = st.secrets["supabase"]["url"]
     key = st.secrets["supabase"]["key"]
     supabase: Client = create_client(url, key)
 except Exception as e:
-    st.error("Ralat menyambung ke Supabase. Pastikan 'secrets' anda betul.")
+    st.error("Ralat menyambung ke Supabase. Pastikan 'secrets' [supabase] anda betul.")
     st.exception(e)
     st.stop()
 
@@ -160,7 +181,6 @@ if st.sidebar.button("Segarkan Semula Data (Refresh)"):
     st.cache_data.clear()
     st.rerun()
 
-# Tambah butang Log Keluar
 st.sidebar.error("Klik untuk keluar dari sistem.")
 if st.sidebar.button("Log Keluar"):
     st.session_state["logged_in"] = False
@@ -201,14 +221,14 @@ if page == "📊 Dashboard Statistik":
         df_gaji_sorted = df_gaji_paparan.copy()
         try:
             df_gaji_sorted['TarikhSort'] = pd.to_datetime(df_gaji_sorted['BulanTahun'], format='%B %Y', errors='coerce')
-            if df_gaji_sorted['TarikhSort'].isnull().all(): 
-                df_gaji_sorted['TarikhSort'] = pd.to_datetime(df_gazi_sorted['BulanTahun'], errors='coerce')
-            df_gaji_sorted = df_gaji_sorted.sort_values('TarikhSort')
+            if df_gazi_sorted['TarikhSort'].isnull().all(): 
+                df_gazi_sorted['TarikhSort'] = pd.to_datetime(df_gazi_sorted['BulanTahun'], errors='coerce')
+            df_gazi_sorted = df_gazi_sorted.sort_values('TarikhSort')
         except Exception:
             pass 
             
         fig_tren_gaji = px.line(
-            df_gaji_sorted, 
+            df_gazi_sorted, 
             x='BulanTahun', 
             y=['JumlahJualan_RM', 'GajiLori_RM', 'GajiPenumbak_RM', 'BahagianPemilik_RM'],
             title="Perbandingan Jualan Kasar vs Pembahagian Gaji",
@@ -332,11 +352,11 @@ elif page == "📝 Kemasukan Data Baru":
                 try:
                     supabase.table('rekod_gaji').insert(data_gaji_baru_dict).execute()
                     supabase.table('rekod_jualan').insert(data_jualan_baru_list).execute()
-                    st.cache_data.clear() # Kosongkan 'cache' supaya data baru akan dimuatkan
+                    st.cache_data.clear()
 
                 except Exception as e:
                     st.error(f"RALAT: Gagal menyimpan data ke Supabase. {e}")
-                    st.stop() # Hentikan jika gagal simpan
+                    st.stop()
 
                 # 7. Papar rumusan & butang muat turun
                 st.success(f"Data untuk {bulan_tahun} telah berjaya diproses DAN DISIMPAN ke database!")

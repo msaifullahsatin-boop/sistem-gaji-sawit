@@ -277,7 +277,7 @@ elif page == "📝 Kemasukan Data Baru":
 
     # --- TAB 1: Borang Jualan dan Gaji ---
     with tab_jualan:
-        st.subheader("Borang Kiraan Gaji")
+        st.subheader("Borang Kiraan Bayaran")
         with st.form("borang_data_gaji"):
             
             st.subheader("A. Maklumat Asas")
@@ -535,3 +535,4 @@ elif page == "🖨️ Urus & Cetak Semula":
                         
                     except Exception as e:
                         st.error(f"RALAT: Gagal memadam data. {e}")
+

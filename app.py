@@ -89,21 +89,21 @@ def jana_pdf_binary(bulan_tahun, senarai_resit, data_kiraan):
 # ----------------------------------
 st.set_page_config(layout="wide", page_title="Sistem Gaji Sawit")
 
-# --- 1. BAHAGIAN LOG MASUK & KESELAMATAN ---
+# --- 1. BAHAGIAN LOG MASUK & KESELAMATAN (KOD BARU) ---
 def check_password():
     """Returns True if user has entered the correct password."""
     
-    # 1. Semak jika pengguna sudah log masuk (guna session state)
     if "logged_in" in st.session_state and st.session_state["logged_in"] == True:
         return True
 
-    # 2. Jika belum, tunjukkan borang log masuk
     try:
         # Ambil kata laluan sebenar dari Streamlit Secrets
         correct_password = st.secrets["APP_PASSWORD"]
+    except KeyError:
+        st.error("Ralat: Rahsia 'APP_PASSWORD' tidak ditemui. Pastikan ia ditambah ke 'Secrets' di Streamlit Cloud.")
+        return False
     except Exception as e:
-        st.error("Ralat: Rahsia 'APP_PASSWORD' belum ditetapkan. Sila hubungi admin.")
-        st.exception(e)
+        st.error(f"Ralat 'secrets' tidak dijangka: {e}")
         return False
 
     st.warning("🔒 Sila masukkan kata laluan untuk mengakses aplikasi ini.")
@@ -111,27 +111,29 @@ def check_password():
 
     if st.button("Log Masuk"):
         if password == correct_password:
-            # Jika betul, simpan dalam session state dan 'rerun'
             st.session_state["logged_in"] = True
             st.rerun()
         else:
             st.error("Kata laluan salah.")
     
-    # Jangan benarkan akses jika belum log masuk
     return False
 
 # --- PANGGIL FUNGSI LOG MASUK DI SINI ---
 if not check_password():
     st.stop() # Hentikan aplikasi jika log masuk gagal
 
-# --- 2. SAMBUNGAN KE SUPABASE ---
+# --- 2. SAMBUNGAN KE SUPABASE (KOD BARU) ---
 # Kod ini hanya akan berjalan jika log masuk BERJAYA
 try:
-    url = st.secrets["supabase"]["url"]
-    key = st.secrets["supabase"]["key"]
+    # Ambil kunci "flat" dari secrets
+    url = st.secrets["SUPABASE_URL"]
+    key = st.secrets["SUPABASE_KEY"]
     supabase: Client = create_client(url, key)
+except KeyError:
+    st.error("Ralat: Rahsia 'SUPABASE_URL' atau 'SUPABASE_KEY' tidak ditemui.")
+    st.stop()
 except Exception as e:
-    st.error("Ralat menyambung ke Supabase. Pastikan 'secrets' anda betul.")
+    st.error("Ralat menyambung ke Supabase.")
     st.exception(e)
     st.stop()
 
@@ -160,7 +162,6 @@ if st.sidebar.button("Segarkan Semula Data (Refresh)"):
     st.cache_data.clear()
     st.rerun()
 
-# Tambah butang Log Keluar
 st.sidebar.error("Klik untuk keluar dari sistem.")
 if st.sidebar.button("Log Keluar"):
     st.session_state["logged_in"] = False
@@ -202,7 +203,7 @@ if page == "📊 Dashboard Statistik":
         try:
             df_gaji_sorted['TarikhSort'] = pd.to_datetime(df_gaji_sorted['BulanTahun'], format='%B %Y', errors='coerce')
             if df_gaji_sorted['TarikhSort'].isnull().all(): 
-                df_gaji_sorted['TarikhSort'] = pd.to_datetime(df_gazi_sorted['BulanTahun'], errors='coerce')
+                df_gaji_sorted['TarikhSort'] = pd.to_datetime(df_gaji_sorted['BulanTahun'], errors='coerce')
             df_gaji_sorted = df_gaji_sorted.sort_values('TarikhSort')
         except Exception:
             pass 

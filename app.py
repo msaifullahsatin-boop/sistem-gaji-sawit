@@ -5,7 +5,7 @@ from fpdf import FPDF
 import datetime
 import io
 import plotly.express as px
-from supabase import create_client, Client # --- BARU ---
+from supabase import create_client, Client
 
 # --- FUNGSI-FUNGSI LOGIK (Tiada Perubahan) ---
 def kira_payroll(senarai_resit):
@@ -33,9 +33,9 @@ def jana_pdf_binary(bulan_tahun, senarai_resit, data_kiraan):
     pdf.add_page()
     pdf.set_font("Helvetica", size=12)
     pdf.set_font("Helvetica", 'B', 18)
-    pdf.cell(0, 10, f"LADANG SAWIT SATIN LUNG MANIS BELURAN", ln=True, align='C')
+    pdf.cell(0, 10, f"LADANG SAWIT SATIN LUNG MANIS", ln=True, align='C')
     pdf.set_font("Helvetica", 'B', 14)
-    pdf.cell(0, 10, f"Laporan Kiraan Bayaran - {bulan_tahun}", ln=True, align='C')
+    pdf.cell(0, 10, f"Laporan Kiraan Gaji - {bulan_tahun}", ln=True, align='C')
     pdf.ln(10)
     pdf.set_font("Helvetica", 'B', 12)
     pdf.cell(0, 10, "Bahagian 1: Butiran Jualan (Resit)", ln=True)
@@ -46,19 +46,19 @@ def jana_pdf_binary(bulan_tahun, senarai_resit, data_kiraan):
     pdf.ln(5)
     pdf.set_font("Helvetica", 'B', 11)
     pdf.cell(0, 8, f"Jumlah Berat Keseluruhan: {data_kiraan['jumlah_berat_kg']:.2f} kg", ln=True)
-    pdf.cell(0, 8, f"Jumlah Hasil Jualan Bersih: RM{data_kiraan['jumlah_hasil_jualan']:.2f}", ln=True)
+    pdf.cell(0, 8, f"Jumlah Hasil Jualan Kasar: RM{data_kiraan['jumlah_hasil_jualan']:.2f}", ln=True)
     pdf.ln(10)
     pdf.set_font("Helvetica", 'B', 12)
-    pdf.cell(0, 10, "Bahagian 2: Pengiraan Bayaran dan Pembahagian", ln=True)
+    pdf.cell(0, 10, "Bahagian 2: Pengiraan Gaji dan Pembahagian", ln=True)
     pdf.set_font("Helvetica", 'BU', 11)
-    pdf.cell(0, 8, "Bayaran Pengangkutan Sawit (Lori):", ln=True)
+    pdf.cell(0, 8, "Gaji Pekerja 1 (Lori):", ln=True)
     pdf.set_font("Helvetica", size=11)
     pdf.cell(0, 8, f"  Kiraan: {data_kiraan['jumlah_berat_kg']:.2f} kg x RM{data_kiraan['kadar_lori_per_kg']:.2f}/kg", ln=True)
     pdf.set_font("Helvetica", 'B', 11)
-    pdf.cell(0, 8, f"  Bayaran Pengangkutan Sawit (Lori) = RM{data_kiraan['gaji_lori']:.2f}", ln=True)
+    pdf.cell(0, 8, f"  Jumlah Gaji Lori = RM{data_kiraan['gaji_lori']:.2f}", ln=True)
     pdf.ln(5)
     pdf.set_font("Helvetica", 'BU', 11)
-    pdf.cell(0, 8, "Hasil Bersih (Selepas Bayaran Pengangkutan Sawit Lori):", ln=True)
+    pdf.cell(0, 8, "Hasil Bersih (Selepas Tolak Gaji Lori):", ln=True)
     pdf.set_font("Helvetica", size=11)
     pdf.cell(0, 8, f"  Kiraan: RM{data_kiraan['jumlah_hasil_jualan']:.2f} - RM{data_kiraan['gaji_lori']:.2f}", ln=True)
     pdf.set_font("Helvetica", 'B', 11)
@@ -69,7 +69,7 @@ def jana_pdf_binary(bulan_tahun, senarai_resit, data_kiraan):
     pdf.set_font("Helvetica", size=11)
     pdf.cell(0, 8, f"  Kiraan: RM{data_kiraan['baki_bersih']:.2f} / 2", ln=True)
     pdf.set_font("Helvetica", 'B', 11)
-    pdf.cell(0, 8, f"  Bayaran (Penumbak Sawit) = RM{data_kiraan['gaji_penumbak']:.2f}", ln=True)
+    pdf.cell(0, 8, f"  Gaji Pekerja 2 (Penumbak) = RM{data_kiraan['gaji_penumbak']:.2f}", ln=True)
     pdf.cell(0, 8, f"  Bahagian Pemilik Ladang = RM{data_kiraan['bahagian_pemilik']:.2f}", ln=True)
     pdf.ln(15)
     pdf.set_font("Helvetica", 'I', 9)
@@ -88,9 +88,44 @@ def jana_pdf_binary(bulan_tahun, senarai_resit, data_kiraan):
 # --- FUNGSI UTAMA APLIKASI WEB ---
 # ----------------------------------
 st.set_page_config(layout="wide", page_title="Sistem Gaji Sawit")
-st.title("Sistem Pengurusan Ladang Sawit 🧑‍🌾")
 
-# --- 1. SAMBUNGAN KE SUPABASE ---
+# --- 1. BAHAGIAN LOG MASUK & KESELAMATAN ---
+def check_password():
+    """Returns True if user has entered the correct password."""
+    
+    # 1. Semak jika pengguna sudah log masuk (guna session state)
+    if "logged_in" in st.session_state and st.session_state["logged_in"] == True:
+        return True
+
+    # 2. Jika belum, tunjukkan borang log masuk
+    try:
+        # Ambil kata laluan sebenar dari Streamlit Secrets
+        correct_password = st.secrets["APP_PASSWORD"]
+    except Exception as e:
+        st.error("Ralat: Rahsia 'APP_PASSWORD' belum ditetapkan. Sila hubungi admin.")
+        st.exception(e)
+        return False
+
+    st.warning("🔒 Sila masukkan kata laluan untuk mengakses aplikasi ini.")
+    password = st.text_input("Kata Laluan:", type="password")
+
+    if st.button("Log Masuk"):
+        if password == correct_password:
+            # Jika betul, simpan dalam session state dan 'rerun'
+            st.session_state["logged_in"] = True
+            st.rerun()
+        else:
+            st.error("Kata laluan salah.")
+    
+    # Jangan benarkan akses jika belum log masuk
+    return False
+
+# --- PANGGIL FUNGSI LOG MASUK DI SINI ---
+if not check_password():
+    st.stop() # Hentikan aplikasi jika log masuk gagal
+
+# --- 2. SAMBUNGAN KE SUPABASE ---
+# Kod ini hanya akan berjalan jika log masuk BERJAYA
 try:
     url = st.secrets["supabase"]["url"]
     key = st.secrets["supabase"]["key"]
@@ -100,41 +135,42 @@ except Exception as e:
     st.exception(e)
     st.stop()
 
-# --- 2. MUATKAN DATA DARI SUPABASE ---
-# Kita guna 'cache_data' untuk elak 'reload' data setiap kali
-@st.cache_data(ttl=600) # 'Cache' data selama 10 minit
+# --- 3. MUATKAN DATA DARI SUPABASE ---
+@st.cache_data(ttl=600)
 def muat_data():
     try:
-        # Baca data dari jadual 'rekod_gaji'
         response_gaji = supabase.table('rekod_gaji').select("*").order('id', desc=False).execute()
         df_gaji = pd.DataFrame(response_gaji.data)
-        
-        # Baca data dari jadual 'rekod_jualan'
         response_jualan = supabase.table('rekod_jualan').select("*").order('id', desc=False).execute()
         df_jualan = pd.DataFrame(response_jualan.data)
-        
         return df_gaji, df_jualan
     except Exception as e:
         st.error(f"Ralat membaca data dari Supabase: {e}")
-        return pd.DataFrame(), pd.DataFrame() # Pulangkan DataFrame kosong jika gagal
+        return pd.DataFrame(), pd.DataFrame()
 
-# Panggil fungsi muat data
 df_gaji, df_jualan = muat_data()
 
-# --- 3. NAVIGASI (TIADA LAGI MUAT NAIK CSV) ---
+# --- 4. PAPARAN APLIKASI SELEPAS LOG MASUK ---
+st.title("Sistem Pengurusan Ladang Sawit 🧑‍🌾")
+
 st.sidebar.title("Navigasi")
 page = st.sidebar.radio("Pilih Halaman:", ["📊 Dashboard Statistik", "📝 Kemasukan Data Baru"])
 
-# Butang untuk 'refresh' data secara manual
 if st.sidebar.button("Segarkan Semula Data (Refresh)"):
-    st.cache_data.clear() # Kosongkan 'cache'
+    st.cache_data.clear()
     st.rerun()
+
+# Tambah butang Log Keluar
+st.sidebar.error("Klik untuk keluar dari sistem.")
+if st.sidebar.button("Log Keluar"):
+    st.session_state["logged_in"] = False
+    st.rerun()
+
 
 # --- Halaman 1: Dashboard Statistik ---
 if page == "📊 Dashboard Statistik":
     st.header("📊 Dashboard Statistik")
     
-    # Padam kolum teknikal Supabase dari paparan
     if not df_gaji.empty:
         df_gaji_paparan = df_gaji.drop(columns=['id', 'created_at'], errors='ignore')
     else:
@@ -166,7 +202,7 @@ if page == "📊 Dashboard Statistik":
         try:
             df_gaji_sorted['TarikhSort'] = pd.to_datetime(df_gaji_sorted['BulanTahun'], format='%B %Y', errors='coerce')
             if df_gaji_sorted['TarikhSort'].isnull().all(): 
-                df_gaji_sorted['TarikhSort'] = pd.to_datetime(df_gaji_sorted['BulanTahun'], errors='coerce')
+                df_gaji_sorted['TarikhSort'] = pd.to_datetime(df_gazi_sorted['BulanTahun'], errors='coerce')
             df_gaji_sorted = df_gaji_sorted.sort_values('TarikhSort')
         except Exception:
             pass 
@@ -294,35 +330,26 @@ elif page == "📝 Kemasukan Data Baru":
                 
                 # 6. Hantar data ke Supabase
                 try:
-                    # Masukkan 1 baris ke 'rekod_gaji'
                     supabase.table('rekod_gaji').insert(data_gaji_baru_dict).execute()
-                    
-                    # Masukkan berbilang baris ke 'rekod_jualan'
                     supabase.table('rekod_jualan').insert(data_jualan_baru_list).execute()
-                    
-                    # 7. Kosongkan 'cache' supaya data baru akan dimuatkan
-                    st.cache_data.clear()
+                    st.cache_data.clear() # Kosongkan 'cache' supaya data baru akan dimuatkan
 
                 except Exception as e:
                     st.error(f"RALAT: Gagal menyimpan data ke Supabase. {e}")
                     st.stop() # Hentikan jika gagal simpan
 
-                # 8. Papar rumusan & butang muat turun (HANYA PDF)
+                # 7. Papar rumusan & butang muat turun
                 st.success(f"Data untuk {bulan_tahun} telah berjaya diproses DAN DISIMPAN ke database!")
-                
                 st.subheader("Rumusan Kiraan")
-                st.metric("Jumlah Jualan Bersih", f"RM{data_kiraan['jumlah_hasil_jualan']:.2f}")
-                st.metric("Bayaran Pengangkutan Sawit (Lori)", f"RM{data_kiraan['gaji_lori']:.2f}")
-                st.metric("Bayaran (Penumbak Sawit)", f"RM{data_kiraan['gaji_penumbak']:.2f}")
-                st.metric("Bahagian Pemilik Ladang", f"RM{data_kiraan['bahagian_pemilik']:.2f}")
-                
+                st.metric("Jumlah Jualan Kasar", f"RM{data_kiraan['jumlah_hasil_jualan']:.2f}")
+                st.metric("Gaji Pekerja 1 (Lori)", f"RM{data_kiraan['gaji_lori']:.2f}")
+                st.metric("Gaji Pekerja 2 (Penumbak)", f"RM{data_kiraan['gaji_penumbak']:.2f}")
+                st.metric("Bahagian Pemilik", f"RM{data_kiraan['bahagian_pemilik']:.2f}")
                 st.subheader("Muat Turun")
                 nama_fail_pdf = f"Laporan_Gaji_{bulan_tahun.replace(' ', '_')}.pdf"
                 st.download_button(
-                    label="Muat Turun Laporan PDF", # Hanya ada 1 butang
+                    label="Muat Turun Laporan PDF",
                     data=pdf_binary,
                     file_name=nama_fail_pdf,
                     mime="application/pdf"
                 )
-
-

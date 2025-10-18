@@ -9,29 +9,20 @@ from supabase import create_client, Client
 
 # --- FUNGSI-FUNGSI LOGIK ---
 
-# --- UBAHSUAI 2: Fungsi kira_payroll kini menerima 'total_kos' ---
 def kira_payroll(senarai_resit, total_kos):
     KADAR_LORI_PER_KG = 0.07
-    
     jumlah_hasil_jualan = sum(resit['Hasil_RM'] for resit in senarai_resit)
     jumlah_berat_kg = sum(resit['Berat_kg'] for resit in senarai_resit)
-
     gaji_lori = jumlah_berat_kg * KADAR_LORI_PER_KG
-    
-    # --- LOGIK BARU ---
-    # Kira baki bersih SELEPAS semua kos
     baki_bersih = jumlah_hasil_jualan - gaji_lori - total_kos
-    # --- TAMAT LOGIK BARU ---
-
     gaji_penumbak = baki_bersih / 2
     bahagian_pemilik = baki_bersih / 2
-    
     data_kiraan = {
         "jumlah_hasil_jualan": jumlah_hasil_jualan,
         "jumlah_berat_kg": jumlah_berat_kg,
         "jumlah_berat_mt": jumlah_berat_kg / 1000,
         "gaji_lori": gaji_lori,
-        "total_kos_operasi": total_kos, # Simpan kos operasi
+        "total_kos_operasi": total_kos,
         "baki_bersih": baki_bersih,
         "gaji_penumbak": gaji_penumbak,
         "bahagian_pemilik": bahagian_pemilik,
@@ -39,7 +30,6 @@ def kira_payroll(senarai_resit, total_kos):
     }
     return data_kiraan
 
-# --- UBAHSUAI 2: PDF kini memaparkan kiraan kos ---
 def jana_pdf_binary(bulan_tahun, senarai_resit, data_kiraan):
     pdf = FPDF()
     pdf.add_page()
@@ -76,21 +66,18 @@ def jana_pdf_binary(bulan_tahun, senarai_resit, data_kiraan):
     pdf.cell(0, 8, f"  Jumlah Gaji Lori = RM{data_kiraan['gaji_lori']:.2f}", ln=True)
     pdf.ln(5)
 
-    # --- BLOK BARU: Kos Operasi ---
+    # Kos Operasi
     pdf.set_font("Helvetica", 'BU', 11)
     pdf.cell(0, 8, "Kos Operasi Bulanan (Baja, Racun, dll):", ln=True)
     pdf.set_font("Helvetica", 'B', 11)
     pdf.cell(0, 8, f"  Jumlah Kos Operasi = RM{data_kiraan['total_kos_operasi']:.2f}", ln=True)
     pdf.ln(5)
-    # --- TAMAT BLOK BARU ---
 
     # Baki Bersih
     pdf.set_font("Helvetica", 'BU', 11)
     pdf.cell(0, 8, "Hasil Bersih (Untuk Dibahagi):", ln=True)
     pdf.set_font("Helvetica", size=11)
-    # --- UBAHSUAI KIRAAN ---
     pdf.cell(0, 8, f"  Kiraan: RM{data_kiraan['jumlah_hasil_jualan']:.2f} (Jualan) - RM{data_kiraan['gaji_lori']:.2f} (Lori) - RM{data_kiraan['total_kos_operasi']:.2f} (Kos Operasi)", ln=True)
-    # --- TAMAT UBAHSUAI ---
     pdf.set_font("Helvetica", 'B', 11)
     pdf.cell(0, 8, f"  Hasil Bersih = RM{data_kiraan['baki_bersih']:.2f}", ln=True)
     pdf.ln(5)
@@ -172,7 +159,6 @@ def muat_data():
         response_jualan = supabase.table('rekod_jualan').select("*").order('id', desc=False).execute()
         df_jualan = pd.DataFrame(response_jualan.data)
         
-        # --- UBAHSUAI 2: Muat naik data kos ---
         response_kos = supabase.table('rekod_kos').select("*").order('id', desc=False).execute()
         df_kos = pd.DataFrame(response_kos.data)
         
@@ -181,21 +167,22 @@ def muat_data():
         st.error(f"Ralat membaca data dari Supabase: {e}")
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
-# Muat naik TIGA set data
 df_gaji, df_jualan, df_kos = muat_data()
 
 # --- 4. PAPARAN APLIKASI SELEPAS LOG MASUK ---
 st.title("Sistem Pengurusan Ladang Sawit 🧑‍🌾")
 
 st.sidebar.title("Navigasi")
-page = st.sidebar.radio("Pilih Halaman:", ["📊 Dashboard Statistik", "📝 Kemasukan Data Baru"])
+# --- UBAHSUAI 3: Tambah halaman 'Urus Data' ---
+page = st.sidebar.radio("Pilih Halaman:", ["📊 Dashboard Statistik", "📝 Kemasukan Data Baru", "❌ Urus Data"])
+# --- TAMAT UBAHSUAI 3 ---
 
 if st.sidebar.button("Segarkan Semula Data (Refresh)"):
     st.cache_data.clear()
     st.rerun()
 
 st.sidebar.error("Klik untuk keluar dari sistem.")
-if st.sidebar.button("Log Masuk Semula"): # Tukar label untuk jelas
+if st.sidebar.button("Log Masuk Semula"):
     st.session_state["logged_in"] = False
     st.rerun()
 
@@ -204,7 +191,6 @@ if st.sidebar.button("Log Masuk Semula"): # Tukar label untuk jelas
 if page == "📊 Dashboard Statistik":
     st.header("📊 Dashboard Statistik")
     
-    # Padam kolum teknikal Supabase
     df_gaji_paparan = df_gaji.drop(columns=['id', 'created_at'], errors='ignore') if not df_gaji.empty else df_gaji
     df_jualan_paparan = df_jualan.drop(columns=['id', 'created_at'], errors='ignore') if not df_jualan.empty else df_jualan
     df_kos_paparan = df_kos.drop(columns=['id', 'created_at'], errors='ignore') if not df_kos.empty else df_kos
@@ -226,14 +212,12 @@ if page == "📊 Dashboard Statistik":
         # Graf Tren
         st.subheader("Tren Jualan, Kos, dan Pembahagian Gaji")
         df_gaji_sorted = df_gaji_paparan.copy()
+        
+        # Sediakan kolum kos jika tiada
+        if 'total_kos_operasi' not in df_gaji_sorted.columns:
+            df_gaji_sorted['total_kos_operasi'] = 0.0
+        
         try:
-            # --- UBAHSUAI 2: Tambah 'TotalKosOperasi' pada df_gaji ---
-            # Kita perlu 'join' data kos ke data gaji untuk graf
-            if 'total_kos_operasi' not in df_gaji_sorted.columns:
-                 # Jika kolum belum ada (data lama), anggap kos 0
-                df_gaji_sorted['total_kos_operasi'] = 0.0
-            
-            # Isih data
             df_gaji_sorted['TarikhSort'] = pd.to_datetime(df_gaji_sorted['BulanTahun'], format='%B %Y', errors='coerce')
             if df_gaji_sorted['TarikhSort'].isnull().all(): 
                 df_gaji_sorted['TarikhSort'] = pd.to_datetime(df_gaji_sorted['BulanTahun'], errors='coerce')
@@ -244,7 +228,6 @@ if page == "📊 Dashboard Statistik":
         fig_tren_gaji = px.line(
             df_gaji_sorted, 
             x='BulanTahun', 
-            # Tambah 'total_kos_operasi' ke graf
             y=['JumlahJualan_RM', 'total_kos_operasi', 'GajiLori_RM', 'GajiPenumbak_RM', 'BahagianPemilik_RM'],
             title="Perbandingan Jualan, Kos, dan Pembahagian Gaji",
             labels={'value': 'Jumlah (RM)', 'BulanTahun': 'Bulan'},
@@ -252,7 +235,7 @@ if page == "📊 Dashboard Statistik":
         )
         st.plotly_chart(fig_tren_gaji, use_container_width=True)
         
-        # Analisis Gred & Kos
+        # Analisis Pecahan
         st.subheader("Analisis Pecahan")
         col_gred1, col_gred2 = st.columns(2)
         
@@ -264,7 +247,6 @@ if page == "📊 Dashboard Statistik":
             st.plotly_chart(fig_pie_hasil, use_container_width=True)
         
         with col_gred2:
-            # --- GRAF BARU: Pecahan Kos ---
             if not df_kos_paparan.empty:
                 fig_pie_kos = px.pie(
                     df_kos_paparan, names='JenisKos', values='Jumlah_RM',
@@ -287,7 +269,6 @@ if page == "📊 Dashboard Statistik":
 elif page == "📝 Kemasukan Data Baru":
     st.header("📝 Kemasukan Data Jualan Bulanan Baru")
     
-    # --- UBAHSUAI 2: Guna 'tabs' untuk borang ---
     tab_jualan, tab_kos = st.tabs(["1. Masukkan Jualan (Gaji)", "2. Masukkan Kos Operasi"])
 
     # --- TAB 1: Borang Jualan dan Gaji ---
@@ -374,13 +355,12 @@ elif page == "📝 Kemasukan Data Baru":
             with st.spinner("Menyimpan kos..."):
                 senarai_kos_bersih = edited_df_kos[edited_df_kos['Jumlah_RM'] > 0].to_dict('records')
                 
-                # Tambah BulanTahun pada setiap rekod kos
                 for kos in senarai_kos_bersih:
                     kos['BulanTahun'] = bulan_tahun_kos
                 
                 try:
                     supabase.table('rekod_kos').insert(senarai_kos_bersih).execute()
-                    st.cache_data.clear() # Kosongkan cache
+                    st.cache_data.clear()
                     st.success(f"Data kos untuk {bulan_tahun_kos} telah berjaya disimpan!")
                     st.info("Data Dashboard akan dikemas kini. Sila kembali ke Tab 1 untuk mengira gaji jika perlu.")
                 except Exception as e:
@@ -388,7 +368,6 @@ elif page == "📝 Kemasukan Data Baru":
                     
     # --- Logik Selepas Borang GAJI Dihantar ---
     if submit_button_gaji:
-        # Semakan keselamatan
         if not bulan_tahun_gaji:
             st.error("Ralat: Sila pilih Bulan dan Tahun.")
         elif edited_df_jualan['Berat_kg'].sum() == 0:
@@ -398,28 +377,28 @@ elif page == "📝 Kemasukan Data Baru":
         else:
             with st.spinner("Sedang mengira dan menyimpan..."):
                 
-                # 1. Dapatkan jumlah kos untuk bulan tersebut dari 'df_kos'
+                # 1. Dapatkan kos
                 if not df_kos.empty:
                     kos_bulan_ini = df_kos[df_kos['BulanTahun'] == bulan_tahun_gaji]['Jumlah_RM'].sum()
                 else:
-                    kos_bulan_ini = 0.0 # Jika tiada rekod kos, anggap 0
+                    kos_bulan_ini = 0.0
                 
-                # 2. Bersihkan data resit jualan
+                # 2. Resit jualan
                 senarai_resit = edited_df_jualan[edited_df_jualan['Berat_kg'] > 0].to_dict('records')
                 
-                # 3. Kira hasil untuk setiap resit
+                # 3. Kira hasil
                 for i, resit in enumerate(senarai_resit):
                     resit['Hasil_RM'] = (resit['Berat_kg'] / 1000) * resit['Harga_RM_per_MT']
                     resit['BulanTahun'] = bulan_tahun_gaji
                     resit['IDResit'] = i + 1
 
-                # 4. Lakukan kiraan gaji (hantar 'kos_bulan_ini')
+                # 4. Kira gaji
                 data_kiraan = kira_payroll(senarai_resit, kos_bulan_ini)
                 
                 # 5. Jana PDF
                 pdf_binary = jana_pdf_binary(bulan_tahun_gaji, senarai_resit, data_kiraan)
                 
-                # 6. Sediakan data baru untuk dihantar ke Supabase
+                # 6. Sediakan data untuk Supabase
                 data_gaji_baru_dict = {
                     'BulanTahun': bulan_tahun_gaji,
                     'JumlahJualan_RM': data_kiraan['jumlah_hasil_jualan'],
@@ -427,7 +406,7 @@ elif page == "📝 Kemasukan Data Baru":
                     'GajiLori_RM': data_kiraan['gaji_lori'],
                     'GajiPenumbak_RM': data_kiraan['gaji_penumbak'],
                     'BahagianPemilik_RM': data_kiraan['bahagian_pemilik'],
-                    'total_kos_operasi': data_kiraan['total_kos_operasi'] # Simpan kos
+                    'total_kos_operasi': data_kiraan['total_kos_operasi']
                 }
                 
                 data_jualan_baru_list = [
@@ -445,7 +424,7 @@ elif page == "📝 Kemasukan Data Baru":
                 try:
                     supabase.table('rekod_gaji').insert(data_gaji_baru_dict).execute()
                     supabase.table('rekod_jualan').insert(data_jualan_baru_list).execute()
-                    st.cache_data.clear() # Kosongkan cache
+                    st.cache_data.clear()
 
                 except Exception as e:
                     st.error(f"RALAT: Gagal menyimpan data gaji. {e}")
@@ -472,3 +451,54 @@ elif page == "📝 Kemasukan Data Baru":
                     file_name=nama_fail_pdf,
                     mime="application/pdf"
                 )
+
+# --- UBAHSUAI 3: Halaman Baru 'Urus Data' ---
+elif page == "❌ Urus Data":
+    st.header("❌ Urus Data")
+    st.warning("AMARAN: Tindakan ini akan memadam data secara kekal dari database.")
+    
+    if df_gaji.empty:
+        st.info("Tiada data untuk dipadam.")
+    else:
+        # Dapatkan senarai bulan yang unik dari data gaji
+        senarai_bulan_rekod = df_gaji['BulanTahun'].unique()
+        
+        with st.form("borang_padam_data"):
+            st.subheader("Pilih Data Bulanan Untuk Dipadam")
+            
+            # Cipta dropdown dari senarai bulan yang ada
+            bulan_dipilih = st.selectbox("Pilih Bulan dan Tahun:", senarai_bulan_rekod)
+            
+            st.subheader("Pengesahan")
+            st.info(f"Anda akan memadam SEMUA data Jualan, Kos, dan Gaji untuk **{bulan_dipilih}**.")
+            
+            # Tambah kotak semak untuk keselamatan tambahan
+            pengesahan = st.checkbox("Saya faham dan ingin teruskan.")
+            
+            submit_button_padam = st.form_submit_button(label="Padam Data Bulan Ini Secara Kekal")
+
+        # Logik selepas borang 'Padam' dihantar
+        if submit_button_padam:
+            if not pengesahan:
+                st.error("Ralat: Sila tandakan kotak pengesahan untuk meneruskan.")
+            elif not bulan_dipilih:
+                st.error("Ralat: Sila pilih bulan untuk dipadam.")
+            else:
+                with st.spinner(f"Memadam semua data untuk {bulan_dipilih}..."):
+                    try:
+                        # Padam dari 'rekod_gaji'
+                        supabase.table('rekod_gaji').delete().eq('BulanTahun', bulan_dipilih).execute()
+                        
+                        # Padam dari 'rekod_jualan'
+                        supabase.table('rekod_jualan').delete().eq('BulanTahun', bulan_dipilih).execute()
+                        
+                        # Padam dari 'rekod_kos'
+                        supabase.table('rekod_kos').delete().eq('BulanTahun', bulan_dipilih).execute()
+                        
+                        # Kosongkan cache dan 'rerun'
+                        st.cache_data.clear()
+                        st.success(f"Semua data untuk {bulan_dipilih} telah berjaya dipadam.")
+                        st.rerun() # 'Rerun' untuk 'refresh' senarai dropdown dan dashboard
+                        
+                    except Exception as e:
+                        st.error(f"RALAT: Gagal memadam data. {e}")

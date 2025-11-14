@@ -111,6 +111,122 @@ def jana_pdf_binary(bulan_tahun, senarai_resit, data_kiraan):
     pdf.cell(0, 10, f"Laporan dijana secara automatik pada {tarikh_jana}", ln=True, align='C')
     return bytes(pdf.output(dest='S'))
 
+# --- FUNGSI BARU UNTUK LAPORAN BERKELOMPOK ---
+def jana_pdf_berkelompok(laporan_title, df_gaji_filtered, df_jualan_filtered, df_kos_filtered):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Helvetica", size=12)
+    
+    # 1. Tajuk
+    pdf.set_font("Helvetica", 'B', 18)
+    pdf.cell(0, 10, f"LADANG SAWIT SATIN LUNG MANIS", ln=True, align='C')
+    pdf.set_font("Helvetica", 'B', 16)
+    pdf.cell(0, 10, f"Ringkasan Laporan - {laporan_title}", ln=True, align='C')
+    pdf.ln(10)
+
+    # 2. Ringkasan Keseluruhan (KPI)
+    pdf.set_font("Helvetica", 'B', 12)
+    pdf.cell(0, 10, "Ringkasan Prestasi Keseluruhan", ln=True)
+    
+    total_jualan = df_gaji_filtered['JumlahJualan_RM'].sum()
+    total_berat = df_gaji_filtered['JumlahBerat_kg'].sum()
+    total_gaji_lori = df_gaji_filtered['GajiLori_RM'].sum()
+    total_kos_ops = df_gaji_filtered.get('total_kos_operasi', 0.0).sum() # Guna .get untuk data lama
+    total_gaji_penumbak = df_gaji_filtered['GajiPenumbak_RM'].sum()
+    total_bahagian_pemilik = df_gaji_filtered['BahagianPemilik_RM'].sum()
+    
+    pdf.set_font("Helvetica", '', 11)
+    pdf.cell(0, 8, f"Jumlah Jualan Kasar: RM {total_jualan:,.2f}", ln=True)
+    pdf.cell(0, 8, f"Jumlah Berat Jualan: {total_berat:,.2f} kg", ln=True)
+    pdf.cell(0, 8, f"Jumlah Kos Operasi: RM {total_kos_ops:,.2f}", ln=True)
+    pdf.cell(0, 8, f"Jumlah Gaji Lori: RM {total_gaji_lori:,.2f}", ln=True)
+    pdf.cell(0, 8, f"Jumlah Gaji Penumbak: RM {total_gaji_penumbak:,.2f}", ln=True)
+    pdf.cell(0, 8, f"Jumlah Bahagian Pemilik: RM {total_bahagian_pemilik:,.2f}", ln=True)
+    pdf.ln(10)
+
+    # 3. Jadual Ringkasan Mengikut Bulan
+    pdf.set_font("Helvetica", 'B', 12)
+    pdf.cell(0, 10, "Pecahan Mengikut Bulan", ln=True)
+    
+    # Lebar sel (jumlah = 190)
+    w_bulan = 40
+    w_angka = 25 
+    
+    pdf.set_font("Helvetica", 'B', 8)
+    pdf.cell(w_bulan, 8, "Bulan", 1, align='C')
+    pdf.cell(w_angka, 8, "Jualan (RM)", 1, align='C')
+    pdf.cell(w_angka, 8, "Kos Ops (RM)", 1, align='C')
+    pdf.cell(w_angka, 8, "Gaji Lori (RM)", 1, align='C')
+    pdf.cell(w_angka, 8, "Gaji Pnumbak (RM)", 1, align='C')
+    pdf.cell(w_angka, 8, "Pemilik (RM)", 1, align='C')
+    pdf.cell(w_angka, 8, "Berat (kg)", 1, ln=True, align='C')
+
+    pdf.set_font("Helvetica", '', 8)
+    # Isih data untuk jadual
+    try:
+        peta_bulan = {
+            "Januari": 1, "Februari": 2, "Mac": 3, "April": 4, "Mei": 5, "Jun": 6,
+            "Julai": 7, "Ogos": 8, "September": 9, "Oktober": 10, "November": 11, "Disember": 12
+        }
+        df_gaji_filtered['BulanString'] = df_gaji_filtered['BulanTahun'].str.split(' ', expand=True)[0]
+        df_gaji_filtered['Tahun'] = df_gaji_filtered['BulanTahun'].str.split(' ', expand=True)[1].astype(int)
+        df_gaji_filtered['BulanNombor'] = df_gaji_filtered['BulanString'].map(peta_bulan)
+        df_gaji_sorted = df_gaji_filtered.sort_values(by=['Tahun', 'BulanNombor'])
+    except Exception:
+        df_gaji_sorted = df_gaji_filtered # Guna susunan asal jika gagal
+        
+    for index, data in df_gaji_sorted.iterrows():
+        pdf.cell(w_bulan, 8, data['BulanTahun'], 1)
+        pdf.cell(w_angka, 8, f"{data['JumlahJualan_RM']:,.2f}", 1, align='R')
+        pdf.cell(w_angka, 8, f"{data.get('total_kos_operasi', 0.0):,.2f}", 1, align='R')
+        pdf.cell(w_angka, 8, f"{data['GajiLori_RM']:,.2f}", 1, align='R')
+        pdf.cell(w_angka, 8, f"{data['GajiPenumbak_RM']:,.2f}", 1, align='R')
+        pdf.cell(w_angka, 8, f"{data['BahagianPemilik_RM']:,.2f}", 1, align='R')
+        pdf.cell(w_angka, 8, f"{data['JumlahBerat_kg']:,.2f}", 1, ln=True, align='R')
+    
+    pdf.ln(10)
+    
+    # 4. Ringkasan Pecahan Jualan (Gred) & Kos
+    pdf.set_font("Helvetica", 'B', 12)
+    pdf.cell(0, 10, "Pecahan Keseluruhan (Gred & Kos)", ln=True)
+    pdf.set_font("Helvetica", '', 11)
+
+    # Pecahan Gred
+    gred_a_berat = df_jualan_filtered[df_jualan_filtered['Gred'] == 'A']['Berat_kg'].sum()
+    gred_a_hasil = df_jualan_filtered[df_jualan_filtered['Gred'] == 'A']['Hasil_RM'].sum()
+    gred_b_berat = df_jualan_filtered[df_jualan_filtered['Gred'] == 'B']['Berat_kg'].sum()
+    gred_b_hasil = df_jualan_filtered[df_jualan_filtered['Gred'] == 'B']['Hasil_RM'].sum()
+    gred_c_berat = df_jualan_filtered[df_jualan_filtered['Gred'] == 'C']['Berat_kg'].sum()
+    gred_c_hasil = df_jualan_filtered[df_jualan_filtered['Gred'] == 'C']['Hasil_RM'].sum()
+    
+    pdf.set_font("Helvetica", 'B', 11)
+    pdf.cell(95, 8, "Pecahan Jualan (Gred)", 1, ln=True, align='C')
+    pdf.set_font("Helvetica", '', 10)
+    pdf.cell(0, 8, f"Gred A: {gred_a_berat:,.2f} kg  |  RM {gred_a_hasil:,.2f}", ln=True)
+    pdf.cell(0, 8, f"Gred B: {gred_b_berat:,.2f} kg  |  RM {gred_b_hasil:,.2f}", ln=True)
+    pdf.cell(0, 8, f"Gred C: {gred_c_berat:,.2f} kg  |  RM {gred_c_hasil:,.2f}", ln=True)
+    pdf.ln(5)
+
+    # Pecahan Kos
+    pdf.set_font("Helvetica", 'B', 11)
+    pdf.cell(95, 8, "Pecahan Kos Operasi", 1, ln=True, align='C')
+    pdf.set_font("Helvetica", '', 10)
+    if not df_kos_filtered.empty:
+        kos_by_type = df_kos_filtered.groupby('JenisKos')['Jumlah_RM'].sum()
+        for jenis, jumlah in kos_by_type.items():
+            pdf.cell(0, 8, f"{jenis}: RM {jumlah:,.2f}", ln=True)
+    else:
+        pdf.cell(0, 8, "Tiada kos operasi direkodkan.", ln=True)
+    
+    # 5. Footer
+    tarikh_jana = datetime.date.today().strftime("%d-%m-%Y")
+    pdf.set_y(-15)
+    pdf.set_font("Helvetica", 'I', 8)
+    pdf.cell(0, 10, f"Laporan dijana secara automatik pada {tarikh_jana} oleh {st.secrets.get('NAMA_ANDA', 'Admin')}", ln=True, align='C')
+    
+    return bytes(pdf.output(dest='S'))
+
+
 # --- FUNGSI UTAMA APLIKASI WEB ---
 st.set_page_config(layout="wide", page_title="Sistem Gaji Sawit")
 
@@ -154,7 +270,7 @@ except Exception as e:
     st.exception(e)
     st.stop()
 
-# --- 3. MUATKAN DATA DARI SUPABASE (TELAH DIBAIKI) ---
+# --- 3. MUATKAN DATA DARI SUPABASE ---
 @st.cache_data(ttl=600)
 def muat_data():
     try:
@@ -167,8 +283,7 @@ def muat_data():
         response_kos = supabase.table('rekod_kos').select("*").order('id', desc=False).execute()
         df_kos = pd.DataFrame(response_kos.data)
         
-        # --- PENAMBAHBAIKAN BERMULA DI SINI ---
-        # Tentukan nama kolum yang sepatutnya wujud, walaupun table kosong
+        # Tentukan nama kolum yang sepatutnya wujud
         expected_gaji_cols = ['BulanTahun', 'JumlahJualan_RM', 'JumlahBerat_kg', 'GajiLori_RM', 
                               'GajiPenumbak_RM', 'BahagianPemilik_RM', 'total_kos_operasi', 
                               'id', 'created_at']
@@ -176,26 +291,18 @@ def muat_data():
                                 'Harga_RM_per_MT', 'Hasil_RM', 'id', 'created_at']
         expected_kos_cols = ['BulanTahun', 'JenisKos', 'Jumlah_RM', 'id', 'created_at']
 
-        # Jika df_gaji kosong, cipta semula dengan kolum yang betul
+        # Cipta DataFrame kosong dengan kolum jika data tiada
         if df_gaji.empty:
-            df_gaji = pd.DataFrame(columns=[col for col in expected_gaji_cols if col in supabase.table('rekod_gaji').select('BulanTahun').execute().data or col in ['id', 'created_at']]) # Logik mudah
-            # Cara lebih selamat jika table wujud tapi kosong:
             df_gaji = pd.DataFrame(columns=expected_gaji_cols)
-        
-        # Jika df_jualan kosong, cipta semula dengan kolum yang betul
         if df_jualan.empty:
             df_jualan = pd.DataFrame(columns=expected_jualan_cols)
-
-        # Jika df_kos kosong, cipta semula dengan kolum yang betul (INI YANG PALING PENTING UNTUK RALAT ANDA)
         if df_kos.empty:
             df_kos = pd.DataFrame(columns=expected_kos_cols)
-        # --- PENAMBAHBAIKAN TAMAT ---
 
         return df_gaji, df_jualan, df_kos
     
     except Exception as e:
         st.error(f"Ralat membaca data dari Supabase: {e}")
-        # Pulangkan DataFrame kosong dengan kolum yang betul jika ralat
         return (pd.DataFrame(columns=expected_gaji_cols), 
                 pd.DataFrame(columns=expected_jualan_cols), 
                 pd.DataFrame(columns=expected_kos_cols))
@@ -206,7 +313,12 @@ df_gaji, df_jualan, df_kos = muat_data()
 st.title("Sistem Pengurusan Ladang Sawit 🧑‍🌾")
 
 st.sidebar.title("Navigasi")
-page = st.sidebar.radio("Pilih Halaman:", ["📊 Dashboard Statistik", "📝 Kemasukan Data Baru", "🖨️ Urus & Cetak Semula"])
+# --- UBAHSUAI 5: TAMBAH HALAMAN BARU ---
+page = st.sidebar.radio("Pilih Halaman:", ["📊 Dashboard Statistik", 
+                                          "📝 Kemasukan Data Baru", 
+                                          "🖨️ Urus & Cetak Semula", 
+                                          "📈 Laporan Berkelompok"]) # <-- Halaman Baru
+# --- TAMAT UBAHSUAI 5 ---
 
 if st.sidebar.button("Segarkan Semula Data (Refresh)"):
     st.cache_data.clear()
@@ -397,12 +509,9 @@ elif page == "📝 Kemasukan Data Baru":
                     kos['BulanTahun'] = bulan_tahun_kos
                 
                 try:
-                    # Semak jika data kos untuk bulan ini sudah wujud
                     if not df_kos.empty and bulan_tahun_kos in df_kos['BulanTahun'].values:
-                        # Jika wujud, padam yang lama dahulu
                         supabase.table('rekod_kos').delete().eq('BulanTahun', bulan_tahun_kos).execute()
                     
-                    # Masukkan data kos baru
                     supabase.table('rekod_kos').insert(senarai_kos_bersih).execute()
                     st.cache_data.clear()
                     st.success(f"Data kos untuk {bulan_tahun_kos} telah berjaya disimpan/dikemaskini!")
@@ -420,28 +529,21 @@ elif page == "📝 Kemasukan Data Baru":
         else:
             with st.spinner("Sedang mengira dan menyimpan..."):
                 
-                # 1. Dapatkan kos
                 if not df_kos.empty:
                     kos_bulan_ini = df_kos[df_kos['BulanTahun'] == bulan_tahun_gaji]['Jumlah_RM'].sum()
                 else:
                     kos_bulan_ini = 0.0
                 
-                # 2. Resit jualan
                 senarai_resit = edited_df_jualan[edited_df_jualan['Berat_kg'] > 0].to_dict('records')
                 
-                # 3. Kira hasil
                 for i, resit in enumerate(senarai_resit):
                     resit['Hasil_RM'] = (resit['Berat_kg'] / 1000) * resit['Harga_RM_per_MT']
                     resit['BulanTahun'] = bulan_tahun_gaji
                     resit['IDResit'] = i + 1
 
-                # 4. Kira gaji
                 data_kiraan = kira_payroll(senarai_resit, kos_bulan_ini)
-                
-                # 5. Jana PDF
                 pdf_binary = jana_pdf_binary(bulan_tahun_gaji, senarai_resit, data_kiraan)
                 
-                # 6. Sediakan data untuk Supabase
                 data_gaji_baru_dict = {
                     'BulanTahun': bulan_tahun_gaji,
                     'JumlahJualan_RM': data_kiraan['jumlah_hasil_jualan'],
@@ -463,7 +565,6 @@ elif page == "📝 Kemasukan Data Baru":
                     } for resit in senarai_resit
                 ]
                 
-                # 7. Hantar data ke Supabase
                 try:
                     supabase.table('rekod_gaji').insert(data_gaji_baru_dict).execute()
                     supabase.table('rekod_jualan').insert(data_jualan_baru_list).execute()
@@ -473,7 +574,6 @@ elif page == "📝 Kemasukan Data Baru":
                     st.error(f"RALAT: Gagal menyimpan data gaji. {e}")
                     st.stop()
 
-                # 8. Papar rumusan
                 st.success(f"Data gaji untuk {bulan_tahun_gaji} telah berjaya diproses DAN DISIMPAN!")
                 
                 st.subheader("Rumusan Kiraan")
@@ -502,10 +602,9 @@ elif page == "🖨️ Urus & Cetak Semula":
     if df_gaji.empty:
         st.info("Tiada data untuk diurus atau dicetak.")
     else:
-        # Dapatkan senarai bulan yang unik dari data gaji
         senarai_bulan_rekod = df_gaji['BulanTahun'].unique()
         
-        # --- BAHAGIAN 1: CETAK SEMULA PDF ---
+        # BAHAGIAN 1: CETAK SEMULA PDF
         st.subheader("1. Cetak Semula Laporan PDF Bulanan")
         with st.form("borang_cetak_semula"):
             bulan_cetak = st.selectbox("Pilih Bulan untuk Dicetak:", senarai_bulan_rekod)
@@ -513,7 +612,6 @@ elif page == "🖨️ Urus & Cetak Semula":
 
         if submit_cetak:
             with st.spinner(f"Menjana PDF untuk {bulan_cetak}..."):
-                # Dapatkan data untuk bulan yang dipilih
                 data_gaji_bulan_ini = df_gaji[df_gaji['BulanTahun'] == bulan_cetak].to_dict('records')[0]
                 senarai_resit = df_jualan[df_jualan['BulanTahun'] == bulan_cetak].to_dict('records')
                 
@@ -540,7 +638,7 @@ elif page == "🖨️ Urus & Cetak Semula":
         
         st.divider()
         
-        # --- BAHAGIAN 2: KEMASKINI DATA (FUNGSI BARU) ---
+        # BAHAGIAN 2: KEMASKINI DATA (FUNGSI BARU)
         st.subheader("✏️ 2. Kemaskini Data Bulanan (Edit)")
         st.info("Untuk membetulkan kesilapan, pilih bulan, muatkan data, buat perubahan, dan simpan.")
 
@@ -560,9 +658,7 @@ elif page == "🖨️ Urus & Cetak Semula":
             
             bulan_edit_aktif = st.session_state.bulan_untuk_diedit
             
-            # Sediakan data Jualan
             data_jualan_sedia_ada = df_jualan[df_jualan['BulanTahun'] == bulan_edit_aktif][['Gred', 'Berat_kg', 'Harga_RM_per_MT']]
-            # Sediakan data Kos (Gunakan df_kos yang dipastikan ada kolum oleh muat_data())
             data_kos_sedia_ada = df_kos[df_kos['BulanTahun'] == bulan_edit_aktif][['JenisKos', 'Jumlah_RM']]
             
             st.warning(f"Anda sedang mengedit data untuk: **{bulan_edit_aktif}**")
@@ -656,7 +752,7 @@ elif page == "🖨️ Urus & Cetak Semula":
         
         st.divider()
         
-        # --- BAHAGIAN 3: PADAM DATA ---
+        # BAHAGIAN 3: PADAM DATA
         st.subheader("❌ 3. Padam Data Bulanan")
         st.warning("AMARAN: Tindakan ini akan memadam data secara kekal dari database.")
         
@@ -686,3 +782,67 @@ elif page == "🖨️ Urus & Cetak Semula":
                         
                     except Exception as e:
                         st.error(f"RALAT: Gagal memadam data. {e}")
+
+# --- HALAMAN 4: LAPORAN BERKELOMPOK (FUNGSI BARU) ---
+elif page == "📈 Laporan Berkelompok":
+    st.header("📈 Laporan Berkelompok (Separuh Tahun & Tahunan)")
+    
+    if df_gaji.empty:
+        st.warning("Tiada data untuk menjana laporan.")
+    else:
+        # Dapatkan senarai tahun yang ada dari data
+        try:
+            df_gaji['Tahun'] = df_gaji['BulanTahun'].str.split(' ', expand=True)[1].astype(int)
+            available_years = sorted(df_gaji['Tahun'].unique(), reverse=True)
+        except Exception:
+            st.error("Ralat memproses tahun dari data. Pastikan format 'BulanTahun' betul.")
+            available_years = [] # Elak 'crash'
+
+        if not available_years:
+            st.info("Tiada data tahunan untuk diproses.")
+        else:
+            with st.form("borang_laporan_berkelompok"):
+                selected_year = st.selectbox("Pilih Tahun:", available_years)
+                report_type = st.radio("Pilih Jenis Laporan:", 
+                                       [
+                                           "Separuh Tahun Pertama (Jan-Jun)",
+                                           "Separuh Tahun Kedua (Jul-Dis)",
+                                           "Laporan Tahunan Penuh (Jan-Dec)"
+                                       ])
+                submit_button_laporan = st.form_submit_button("Jana Laporan PDF")
+
+            if submit_button_laporan:
+                with st.spinner(f"Menjana laporan untuk {report_type} {selected_year}..."):
+                    # 1. Tentukan senarai bulan berdasarkan pilihan
+                    bulan_h1 = ["Januari", "Februari", "Mac", "April", "Mei", "Jun"]
+                    bulan_h2 = ["Julai", "Ogos", "September", "Oktober", "November", "Disember"]
+                    
+                    if report_type == "Separuh Tahun Pertama (Jan-Jun)":
+                        bulan_list = [f"{b} {selected_year}" for b in bulan_h1]
+                        laporan_title = f"Separuh Tahun Pertama {selected_year}"
+                    elif report_type == "Separuh Tahun Kedua (Jul-Dis)":
+                        bulan_list = [f"{b} {selected_year}" for b in bulan_h2]
+                        laporan_title = f"Separuh Tahun Kedua {selected_year}"
+                    else: # Laporan Tahunan
+                        bulan_list = [f"{b} {selected_year}" for b in (bulan_h1 + bulan_h2)]
+                        laporan_title = f"Tahunan Penuh {selected_year}"
+
+                    # 2. Tapis (filter) semua data berdasarkan senarai bulan
+                    df_gaji_filtered = df_gaji[df_gaji['BulanTahun'].isin(bulan_list)]
+                    df_jualan_filtered = df_jualan[df_jualan['BulanTahun'].isin(bulan_list)]
+                    df_kos_filtered = df_kos[df_kos['BulanTahun'].isin(bulan_list)]
+
+                    if df_gaji_filtered.empty:
+                        st.error(f"Tiada data ditemui untuk tempoh yang dipilih.")
+                    else:
+                        # 3. Jana PDF Berkelompok
+                        pdf_binary = jana_pdf_berkelompok(laporan_title, df_gaji_filtered, df_jualan_filtered, df_kos_filtered)
+                        
+                        # 4. Sediakan butang muat turun
+                        nama_fail_pdf = f"Laporan_{laporan_title.replace(' ', '_')}.pdf"
+                        st.download_button(
+                            label=f"Muat Turun PDF: {laporan_title}",
+                            data=pdf_binary,
+                            file_name=nama_fail_pdf,
+                            mime="application/pdf"
+                        )

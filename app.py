@@ -212,7 +212,7 @@ if page == "📊 Dashboard Statistik":
         col3.metric("Purata Pendapatan Bulanan (Pemilik)", f"RM{avg_monthly_owner:,.2f}")
         st.markdown("---")
         
-        # --- BLOK PENGISIHAN BARU (TELAH DIBAIKI) ---
+        # Graf Tren
         st.subheader("Tren Jualan, Kos, dan Pembahagian Gaji")
         df_gaji_sorted = df_gaji_paparan.copy()
         
@@ -220,31 +220,23 @@ if page == "📊 Dashboard Statistik":
             df_gaji_sorted['total_kos_operasi'] = 0.0
         
         try:
-            # 1. Cipta pemetaan (mapping) bulan
+            # Blok Pengisihan Graf
             peta_bulan = {
                 "Januari": 1, "Februari": 2, "Mac": 3, "April": 4, "Mei": 5, "Jun": 6,
                 "Julai": 7, "Ogos": 8, "September": 9, "Oktober": 10, "November": 11, "Disember": 12
             }
-            
-            # 2. Asingkan 'BulanTahun' kepada kolum baru (cth: "Ogos 2025" -> "Ogos" dan "2025")
             df_split = df_gaji_sorted['BulanTahun'].str.split(' ', expand=True)
             df_gaji_sorted['BulanString'] = df_split[0]
             df_gaji_sorted['Tahun'] = df_split[1].astype(int)
-            
-            # 3. Tukar nama bulan (string) kepada nombor
             df_gaji_sorted['BulanNombor'] = df_gaji_sorted['BulanString'].map(peta_bulan)
-            
-            # 4. Isih (Sort) mengikut Tahun, kemudian BulanNombor
             df_gaji_sorted = df_gaji_sorted.sort_values(by=['Tahun', 'BulanNombor'])
             
         except Exception as e:
-            # Jika gagal (cth: data lama ada format lain), guna susunan asal
             st.warning(f"Ralat semasa mengisih graf: {e}. Graf mungkin tidak teratur.")
             pass 
-        # --- TAMAT BLOK PENGISIHAN BARU ---
             
         fig_tren_gaji = px.line(
-            df_gaji_sorted, # Gunakan dataframe yang telah diisih
+            df_gaji_sorted, 
             x='BulanTahun', 
             y=['JumlahJualan_RM', 'total_kos_operasi', 'GajiLori_RM', 'GajiPenumbak_RM', 'BahagianPemilik_RM'],
             title="Perbandingan Jualan, Kos, dan Pembahagian Gaji",
@@ -377,10 +369,15 @@ elif page == "📝 Kemasukan Data Baru":
                     kos['BulanTahun'] = bulan_tahun_kos
                 
                 try:
+                    # Semak jika data kos untuk bulan ini sudah wujud
+                    if not df_kos.empty and bulan_tahun_kos in df_kos['BulanTahun'].values:
+                        # Jika wujud, padam yang lama dahulu
+                        supabase.table('rekod_kos').delete().eq('BulanTahun', bulan_tahun_kos).execute()
+                    
+                    # Masukkan data kos baru
                     supabase.table('rekod_kos').insert(senarai_kos_bersih).execute()
                     st.cache_data.clear()
-                    st.success(f"Data kos untuk {bulan_tahun_kos} telah berjaya disimpan!")
-                    st.info("Data Dashboard akan dikemas kini. Sila kembali ke Tab 1 untuk mengira gaji jika perlu.")
+                    st.success(f"Data kos untuk {bulan_tahun_kos} telah berjaya disimpan/dikemaskini!")
                 except Exception as e:
                     st.error(f"RALAT: Gagal menyimpan data kos. {e}")
                     
@@ -481,18 +478,17 @@ elif page == "🖨️ Urus & Cetak Semula":
         senarai_bulan_rekod = df_gaji['BulanTahun'].unique()
         
         # --- BAHAGIAN 1: CETAK SEMULA PDF ---
-        st.subheader("Cetak Semula Laporan PDF Bulanan")
+        st.subheader("1. Cetak Semula Laporan PDF Bulanan")
         with st.form("borang_cetak_semula"):
             bulan_cetak = st.selectbox("Pilih Bulan untuk Dicetak:", senarai_bulan_rekod)
             submit_cetak = st.form_submit_button("Jana PDF")
 
         if submit_cetak:
             with st.spinner(f"Menjana PDF untuk {bulan_cetak}..."):
-                # 1. Dapatkan data untuk bulan yang dipilih
+                # Dapatkan data untuk bulan yang dipilih
                 data_gaji_bulan_ini = df_gaji[df_gaji['BulanTahun'] == bulan_cetak].to_dict('records')[0]
                 senarai_resit = df_jualan[df_jualan['BulanTahun'] == bulan_cetak].to_dict('records')
                 
-                # 2. Susun semula data untuk fungsi 'jana_pdf_binary'
                 data_kiraan_cetak = {
                     'jumlah_hasil_jualan': data_gaji_bulan_ini['JumlahJualan_RM'],
                     'jumlah_berat_kg': data_gaji_bulan_ini['JumlahBerat_kg'],
@@ -504,10 +500,8 @@ elif page == "🖨️ Urus & Cetak Semula":
                     'bahagian_pemilik': data_gaji_bulan_ini['BahagianPemilik_RM']
                 }
                 
-                # 3. Jana PDF
                 pdf_binary = jana_pdf_binary(bulan_cetak, senarai_resit, data_kiraan_cetak)
                 
-                # 4. Sediakan butang muat turun
                 nama_fail_pdf = f"Laporan_Gaji_{bulan_cetak.replace(' ', '_')}.pdf"
                 st.download_button(
                     label=f"Muat Turun Laporan PDF untuk {bulan_cetak}",
@@ -516,10 +510,136 @@ elif page == "🖨️ Urus & Cetak Semula":
                     mime="application/pdf"
                 )
         
-        st.divider() # Garisan pemisah
+        st.divider()
         
-        # --- BAHAGIAN 2: PADAM DATA ---
-        st.subheader("❌ Padam Data Bulanan")
+        # --- BAHAGIAN 2: KEMASKINI DATA (FUNGSI BARU) ---
+        st.subheader("✏️ 2. Kemaskini Data Bulanan (Edit)")
+        st.info("Untuk membetulkan kesilapan, pilih bulan, muatkan data, buat perubahan, dan simpan.")
+
+        # Gunakan session state untuk simpan bulan yang dipilih
+        if 'bulan_untuk_diedit' not in st.session_state:
+            st.session_state.bulan_untuk_diedit = None
+
+        # Borang 1: Pilih bulan untuk diedit
+        col1_edit, col2_edit = st.columns([3, 1])
+        with col1_edit:
+            bulan_edit_dipilih = st.selectbox("Pilih Bulan untuk Diedit:", senarai_bulan_rekod, key="pilih_bulan_edit")
+        with col2_edit:
+            st.write(" ") # Spacer
+            if st.button("Muatkan Data Sedia Ada"):
+                st.session_state.bulan_untuk_diedit = bulan_edit_dipilih
+                st.rerun() # Muat semula untuk memaparkan borang edit
+
+        # Borang 2: Borang edit (hanya muncul jika bulan telah dimuatkan)
+        if st.session_state.bulan_untuk_diedit:
+            
+            # Dapatkan data sedia ada untuk bulan yang dipilih
+            bulan_edit_aktif = st.session_state.bulan_untuk_diedit
+            
+            # Sediakan data Jualan
+            data_jualan_sedia_ada = df_jualan[df_jualan['BulanTahun'] == bulan_edit_aktif][['Gred', 'Berat_kg', 'Harga_RM_per_MT']]
+            # Sediakan data Kos
+            data_kos_sedia_ada = df_kos[df_kos['BulanTahun'] == bulan_edit_aktif][['JenisKos', 'Jumlah_RM']]
+            
+            st.warning(f"Anda sedang mengedit data untuk: **{bulan_edit_aktif}**")
+            
+            with st.form("borang_kemaskini_data"):
+                st.subheader("A. Kemaskini Butiran Jualan")
+                edited_df_jualan = st.data_editor(
+                    data_jualan_sedia_ada, num_rows="dynamic",
+                    column_config={
+                        "Gred": st.column_config.SelectboxColumn("Gred", options=["A", "B", "C"], required=True),
+                        "Berat_kg": st.column_config.NumberColumn("Berat (kg)", min_value=0.0, format="%.2f", required=True),
+                        "Harga_RM_per_MT": st.column_config.NumberColumn("Harga Jualan (RM/MT)", min_value=0.0, format="%.2f", required=True)
+                    },
+                    key="data_editor_edit_jualan"
+                )
+                
+                st.subheader("B. Kemaskini Butiran Kos")
+                edited_df_kos = st.data_editor(
+                    data_kos_sedia_ada, num_rows="dynamic",
+                    column_config={
+                        "JenisKos": st.column_config.TextColumn("Jenis Kos", required=True),
+                        "Jumlah_RM": st.column_config.NumberColumn("Jumlah (RM)", min_value=0.0, format="%.2f", required=True)
+                    },
+                    key="data_editor_edit_kos"
+                )
+                
+                submit_button_edit = st.form_submit_button("Kira Semula & Simpan Perubahan")
+
+            # Logik selepas borang 'Edit' dihantar
+            if submit_button_edit:
+                with st.spinner(f"Mengemaskini data untuk {bulan_edit_aktif}..."):
+                    
+                    try:
+                        # 1. PADAM SEMUA data lama untuk bulan ini
+                        supabase.table('rekod_gaji').delete().eq('BulanTahun', bulan_edit_aktif).execute()
+                        supabase.table('rekod_jualan').delete().eq('BulanTahun', bulan_edit_aktif).execute()
+                        supabase.table('rekod_kos').delete().eq('BulanTahun', bulan_edit_aktif).execute()
+                        
+                        # 2. Sediakan data KOS baru
+                        total_kos_baru = 0.0
+                        if not edited_df_kos.empty and edited_df_kos['Jumlah_RM'].sum() > 0:
+                            senarai_kos_baru = edited_df_kos[edited_df_kos['Jumlah_RM'] > 0].to_dict('records')
+                            for kos in senarai_kos_baru:
+                                kos['BulanTahun'] = bulan_edit_aktif
+                            
+                            # Simpan kos baru
+                            supabase.table('rekod_kos').insert(senarai_kos_baru).execute()
+                            total_kos_baru = sum(k['Jumlah_RM'] for k in senarai_kos_baru)
+                        
+                        # 3. Sediakan data JUALAN baru & Kira Gaji
+                        if not edited_df_jualan.empty and edited_df_jualan['Berat_kg'].sum() > 0:
+                            senarai_resit_baru = edited_df_jualan[edited_df_jualan['Berat_kg'] > 0].to_dict('records')
+                            
+                            # Kira hasil & tambah info
+                            for i, resit in enumerate(senarai_resit_baru):
+                                resit['Hasil_RM'] = (resit['Berat_kg'] / 1000) * resit['Harga_RM_per_MT']
+                                resit['BulanTahun'] = bulan_edit_aktif
+                                resit['IDResit'] = i + 1
+                            
+                            # Kira gaji
+                            data_kiraan_baru = kira_payroll(senarai_resit_baru, total_kos_baru)
+                            
+                            # Sediakan data untuk Supabase
+                            data_gaji_baru_dict = {
+                                'BulanTahun': bulan_edit_aktif,
+                                'JumlahJualan_RM': data_kiraan_baru['jumlah_hasil_jualan'],
+                                'JumlahBerat_kg': data_kiraan_baru['jumlah_berat_kg'],
+                                'GajiLori_RM': data_kiraan_baru['gaji_lori'],
+                                'GajiPenumbak_RM': data_kiraan_baru['gaji_penumbak'],
+                                'BahagianPemilik_RM': data_kiraan_baru['bahagian_pemilik'],
+                                'total_kos_operasi': data_kiraan_baru['total_kos_operasi']
+                            }
+                            
+                            data_jualan_baru_list = [
+                                {
+                                    'BulanTahun': resit['BulanTahun'],
+                                    'IDResit': resit['IDResit'],
+                                    'Gred': resit['Gred'],
+                                    'Berat_kg': resit['Berat_kg'],
+                                    'Harga_RM_per_MT': resit['Harga_RM_per_MT'],
+                                    'Hasil_RM': resit['Hasil_RM']
+                                } for resit in senarai_resit_baru
+                            ]
+                            
+                            # Simpan jualan & gaji baru
+                            supabase.table('rekod_gaji').insert(data_gaji_baru_dict).execute()
+                            supabase.table('rekod_jualan').insert(data_jualan_baru_list).execute()
+                        
+                        # 4. Selesai
+                        st.cache_data.clear()
+                        st.session_state.bulan_untuk_diedit = None # Reset borang
+                        st.success(f"Data untuk {bulan_edit_aktif} telah berjaya dikemaskini!")
+                        st.rerun()
+                        
+                    except Exception as e:
+                        st.error(f"RALAT: Gagal mengemaskini data. {e}")
+        
+        st.divider()
+        
+        # --- BAHAGIAN 3: PADAM DATA ---
+        st.subheader("❌ 3. Padam Data Bulanan")
         st.warning("AMARAN: Tindakan ini akan memadam data secara kekal dari database.")
         
         with st.form("borang_padam_data"):

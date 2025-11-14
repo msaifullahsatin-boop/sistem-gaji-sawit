@@ -1,0 +1,18 @@
+name: Keep Supabase Alive
+
+on:
+  # Ini adalah penjadual (cron)
+  # Ia akan berjalan pada 00:00 (tengah malam) setiap 6 hari
+  schedule:
+    - cron: '0 0 */6 * *'
+    
+  # Ini membenarkan anda menekan butang "Run" secara manual untuk mengujinya
+  workflow_dispatch:
+
+jobs:
+  ping-app:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping the Streamlit app to keep Supabase active
+        # TUKAR URL DI BAWAH kepada URL anda
+        run: curl -s https://sawitbeluran.streamlit.app/ > /dev/null

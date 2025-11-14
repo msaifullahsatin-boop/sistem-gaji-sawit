@@ -154,7 +154,7 @@ except Exception as e:
     st.exception(e)
     st.stop()
 
-# --- 3. MUATKAN DATA DARI SUPABASE ---
+# --- 3. MUATKAN DATA DARI SUPABASE (TELAH DIBAIKI) ---
 @st.cache_data(ttl=600)
 def muat_data():
     try:
@@ -167,10 +167,38 @@ def muat_data():
         response_kos = supabase.table('rekod_kos').select("*").order('id', desc=False).execute()
         df_kos = pd.DataFrame(response_kos.data)
         
+        # --- PENAMBAHBAIKAN BERMULA DI SINI ---
+        # Tentukan nama kolum yang sepatutnya wujud, walaupun table kosong
+        expected_gaji_cols = ['BulanTahun', 'JumlahJualan_RM', 'JumlahBerat_kg', 'GajiLori_RM', 
+                              'GajiPenumbak_RM', 'BahagianPemilik_RM', 'total_kos_operasi', 
+                              'id', 'created_at']
+        expected_jualan_cols = ['BulanTahun', 'IDResit', 'Gred', 'Berat_kg', 
+                                'Harga_RM_per_MT', 'Hasil_RM', 'id', 'created_at']
+        expected_kos_cols = ['BulanTahun', 'JenisKos', 'Jumlah_RM', 'id', 'created_at']
+
+        # Jika df_gaji kosong, cipta semula dengan kolum yang betul
+        if df_gaji.empty:
+            df_gaji = pd.DataFrame(columns=[col for col in expected_gaji_cols if col in supabase.table('rekod_gaji').select('BulanTahun').execute().data or col in ['id', 'created_at']]) # Logik mudah
+            # Cara lebih selamat jika table wujud tapi kosong:
+            df_gaji = pd.DataFrame(columns=expected_gaji_cols)
+        
+        # Jika df_jualan kosong, cipta semula dengan kolum yang betul
+        if df_jualan.empty:
+            df_jualan = pd.DataFrame(columns=expected_jualan_cols)
+
+        # Jika df_kos kosong, cipta semula dengan kolum yang betul (INI YANG PALING PENTING UNTUK RALAT ANDA)
+        if df_kos.empty:
+            df_kos = pd.DataFrame(columns=expected_kos_cols)
+        # --- PENAMBAHBAIKAN TAMAT ---
+
         return df_gaji, df_jualan, df_kos
+    
     except Exception as e:
         st.error(f"Ralat membaca data dari Supabase: {e}")
-        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+        # Pulangkan DataFrame kosong dengan kolum yang betul jika ralat
+        return (pd.DataFrame(columns=expected_gaji_cols), 
+                pd.DataFrame(columns=expected_jualan_cols), 
+                pd.DataFrame(columns=expected_kos_cols))
 
 df_gaji, df_jualan, df_kos = muat_data()
 
@@ -257,7 +285,7 @@ if page == "📊 Dashboard Statistik":
             st.plotly_chart(fig_pie_hasil, use_container_width=True)
         
         with col_gred2:
-            if not df_kos_paparan.empty:
+            if not df_kos_paparan.empty and df_kos_paparan['Jumlah_RM'].sum() > 0:
                 fig_pie_kos = px.pie(
                     df_kos_paparan, names='JenisKos', values='Jumlah_RM',
                     title="Pecahan Kos Operasi mengikut Jenis"
@@ -516,29 +544,25 @@ elif page == "🖨️ Urus & Cetak Semula":
         st.subheader("✏️ 2. Kemaskini Data Bulanan (Edit)")
         st.info("Untuk membetulkan kesilapan, pilih bulan, muatkan data, buat perubahan, dan simpan.")
 
-        # Gunakan session state untuk simpan bulan yang dipilih
         if 'bulan_untuk_diedit' not in st.session_state:
             st.session_state.bulan_untuk_diedit = None
 
-        # Borang 1: Pilih bulan untuk diedit
         col1_edit, col2_edit = st.columns([3, 1])
         with col1_edit:
             bulan_edit_dipilih = st.selectbox("Pilih Bulan untuk Diedit:", senarai_bulan_rekod, key="pilih_bulan_edit")
         with col2_edit:
-            st.write(" ") # Spacer
+            st.write(" ")
             if st.button("Muatkan Data Sedia Ada"):
                 st.session_state.bulan_untuk_diedit = bulan_edit_dipilih
-                st.rerun() # Muat semula untuk memaparkan borang edit
+                st.rerun()
 
-        # Borang 2: Borang edit (hanya muncul jika bulan telah dimuatkan)
         if st.session_state.bulan_untuk_diedit:
             
-            # Dapatkan data sedia ada untuk bulan yang dipilih
             bulan_edit_aktif = st.session_state.bulan_untuk_diedit
             
             # Sediakan data Jualan
             data_jualan_sedia_ada = df_jualan[df_jualan['BulanTahun'] == bulan_edit_aktif][['Gred', 'Berat_kg', 'Harga_RM_per_MT']]
-            # Sediakan data Kos
+            # Sediakan data Kos (Gunakan df_kos yang dipastikan ada kolum oleh muat_data())
             data_kos_sedia_ada = df_kos[df_kos['BulanTahun'] == bulan_edit_aktif][['JenisKos', 'Jumlah_RM']]
             
             st.warning(f"Anda sedang mengedit data untuk: **{bulan_edit_aktif}**")
@@ -567,7 +591,6 @@ elif page == "🖨️ Urus & Cetak Semula":
                 
                 submit_button_edit = st.form_submit_button("Kira Semula & Simpan Perubahan")
 
-            # Logik selepas borang 'Edit' dihantar
             if submit_button_edit:
                 with st.spinner(f"Mengemaskini data untuk {bulan_edit_aktif}..."):
                     
@@ -584,7 +607,6 @@ elif page == "🖨️ Urus & Cetak Semula":
                             for kos in senarai_kos_baru:
                                 kos['BulanTahun'] = bulan_edit_aktif
                             
-                            # Simpan kos baru
                             supabase.table('rekod_kos').insert(senarai_kos_baru).execute()
                             total_kos_baru = sum(k['Jumlah_RM'] for k in senarai_kos_baru)
                         
@@ -592,16 +614,13 @@ elif page == "🖨️ Urus & Cetak Semula":
                         if not edited_df_jualan.empty and edited_df_jualan['Berat_kg'].sum() > 0:
                             senarai_resit_baru = edited_df_jualan[edited_df_jualan['Berat_kg'] > 0].to_dict('records')
                             
-                            # Kira hasil & tambah info
                             for i, resit in enumerate(senarai_resit_baru):
                                 resit['Hasil_RM'] = (resit['Berat_kg'] / 1000) * resit['Harga_RM_per_MT']
                                 resit['BulanTahun'] = bulan_edit_aktif
                                 resit['IDResit'] = i + 1
                             
-                            # Kira gaji
                             data_kiraan_baru = kira_payroll(senarai_resit_baru, total_kos_baru)
                             
-                            # Sediakan data untuk Supabase
                             data_gaji_baru_dict = {
                                 'BulanTahun': bulan_edit_aktif,
                                 'JumlahJualan_RM': data_kiraan_baru['jumlah_hasil_jualan'],
@@ -623,7 +642,6 @@ elif page == "🖨️ Urus & Cetak Semula":
                                 } for resit in senarai_resit_baru
                             ]
                             
-                            # Simpan jualan & gaji baru
                             supabase.table('rekod_gaji').insert(data_gaji_baru_dict).execute()
                             supabase.table('rekod_jualan').insert(data_jualan_baru_list).execute()
                         
@@ -643,7 +661,6 @@ elif page == "🖨️ Urus & Cetak Semula":
         st.warning("AMARAN: Tindakan ini akan memadam data secara kekal dari database.")
         
         with st.form("borang_padam_data"):
-            # Guna senarai bulan yang sama
             bulan_dipilih = st.selectbox("Pilih Bulan dan Tahun untuk Dipadam:", senarai_bulan_rekod, key="padam_bulan")
             
             st.subheader("Pengesahan")

@@ -6,6 +6,7 @@ import datetime
 import io
 import plotly.express as px
 from supabase import create_client, Client
+import openpyxl # Diperlukan untuk Excel
 
 # --- FUNGSI-FUNGSI LOGIK ---
 
@@ -111,7 +112,6 @@ def jana_pdf_binary(bulan_tahun, senarai_resit, data_kiraan):
     pdf.cell(0, 10, f"Laporan dijana secara automatik pada {tarikh_jana}", ln=True, align='C')
     return bytes(pdf.output(dest='S'))
 
-# --- FUNGSI BARU UNTUK LAPORAN BERKELOMPOK ---
 def jana_pdf_berkelompok(laporan_title, df_gaji_filtered, df_jualan_filtered, df_kos_filtered):
     pdf = FPDF()
     pdf.add_page()
@@ -131,7 +131,7 @@ def jana_pdf_berkelompok(laporan_title, df_gaji_filtered, df_jualan_filtered, df
     total_jualan = df_gaji_filtered['JumlahJualan_RM'].sum()
     total_berat = df_gaji_filtered['JumlahBerat_kg'].sum()
     total_gaji_lori = df_gaji_filtered['GajiLori_RM'].sum()
-    total_kos_ops = df_gaji_filtered.get('total_kos_operasi', 0.0).sum() # Guna .get untuk data lama
+    total_kos_ops = df_gaji_filtered.get('total_kos_operasi', 0.0).sum()
     total_gaji_penumbak = df_gaji_filtered['GajiPenumbak_RM'].sum()
     total_bahagian_pemilik = df_gaji_filtered['BahagianPemilik_RM'].sum()
     
@@ -148,7 +148,6 @@ def jana_pdf_berkelompok(laporan_title, df_gaji_filtered, df_jualan_filtered, df
     pdf.set_font("Helvetica", 'B', 12)
     pdf.cell(0, 10, "Pecahan Mengikut Bulan", ln=True)
     
-    # Lebar sel (jumlah = 190)
     w_bulan = 40
     w_angka = 25 
     
@@ -162,7 +161,6 @@ def jana_pdf_berkelompok(laporan_title, df_gaji_filtered, df_jualan_filtered, df
     pdf.cell(w_angka, 8, "Berat (kg)", 1, ln=True, align='C')
 
     pdf.set_font("Helvetica", '', 8)
-    # Isih data untuk jadual
     try:
         peta_bulan = {
             "Januari": 1, "Februari": 2, "Mac": 3, "April": 4, "Mei": 5, "Jun": 6,
@@ -173,7 +171,7 @@ def jana_pdf_berkelompok(laporan_title, df_gaji_filtered, df_jualan_filtered, df
         df_gaji_filtered['BulanNombor'] = df_gaji_filtered['BulanString'].map(peta_bulan)
         df_gaji_sorted = df_gaji_filtered.sort_values(by=['Tahun', 'BulanNombor'])
     except Exception:
-        df_gaji_sorted = df_gaji_filtered # Guna susunan asal jika gagal
+        df_gaji_sorted = df_gaji_filtered
         
     for index, data in df_gaji_sorted.iterrows():
         pdf.cell(w_bulan, 8, data['BulanTahun'], 1)
@@ -226,6 +224,50 @@ def jana_pdf_berkelompok(laporan_title, df_gaji_filtered, df_jualan_filtered, df
     
     return bytes(pdf.output(dest='S'))
 
+# --- FUNGSI BARU UNTUK BACKUP EXCEL ---
+def to_excel(df_gaji, df_jualan, df_kos):
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df_gaji.to_excel(writer, sheet_name='Ringkasan_Gaji', index=False)
+        df_jualan.to_excel(writer, sheet_name='Butiran_Jualan', index=False)
+        df_kos.to_excel(writer, sheet_name='Butiran_Kos', index=False)
+    processed_data = output.getvalue()
+    return processed_data
+
+# --- FUNGSI BARU UNTUK PROSES DATA (GRAF) ---
+def proses_dataframe_bulanan(df_gaji_raw):
+    """Memproses df_gaji untuk menambah kolum Tahun, BulanNombor, dan Keuntungan_RM."""
+    if df_gaji_raw.empty:
+        return pd.DataFrame(columns=['BulanTahun', 'Tahun', 'BulanNombor', 'BulanString', 'JumlahJualan_RM', 'total_kos_operasi', 'Keuntungan_RM'])
+
+    df = df_gaji_raw.copy()
+    
+    # 1. Sediakan kolum kos
+    if 'total_kos_operasi' not in df.columns:
+        df['total_kos_operasi'] = 0.0
+    df['total_kos_operasi'] = df['total_kos_operasi'].fillna(0) # Ganti nilai 'None' (jika ada)
+
+    # 2. Kira Keuntungan (Jualan - Gaji Lori - Kos Ops)
+    df['Keuntungan_RM'] = df['JumlahJualan_RM'] - df['GajiLori_RM'] - df['total_kos_operasi']
+
+    # 3. Proses Bulan & Tahun untuk pengisihan
+    try:
+        peta_bulan = {
+            "Januari": 1, "Februari": 2, "Mac": 3, "April": 4, "Mei": 5, "Jun": 6,
+            "Julai": 7, "Ogos": 8, "September": 9, "Oktober": 10, "November": 11, "Disember": 12
+        }
+        df_split = df['BulanTahun'].str.split(' ', expand=True)
+        df['BulanString'] = df_split[0]
+        df['Tahun'] = df_split[1].astype(int)
+        df['BulanNombor'] = df['BulanString'].map(peta_bulan)
+    except Exception as e:
+        st.error(f"Ralat memproses 'BulanTahun': {e}. Pastikan format data betul.")
+        # Cipta kolum 'dummy' untuk elak 'crash'
+        df['Tahun'] = 2000
+        df['BulanNombor'] = 1
+        df['BulanString'] = 'N/A'
+
+    return df
 
 # --- FUNGSI UTAMA APLIKASI WEB ---
 st.set_page_config(layout="wide", page_title="Sistem Gaji Sawit")
@@ -237,7 +279,7 @@ def check_password():
     try:
         correct_password = st.secrets["APP_PASSWORD"]
     except KeyError:
-        st.error("Ralat: Rahsia 'APP_PASSWORD' tidak ditemui. Pastikan ia ditambah ke 'Secrets' di Streamlit Cloud.")
+        st.error("Ralat: Rahsia 'APP_PASSWORD' tidak ditemui.")
         return False
     except Exception as e:
         st.error(f"Ralat 'secrets' tidak dijangka: {e}")
@@ -307,18 +349,19 @@ def muat_data():
                 pd.DataFrame(columns=expected_jualan_cols), 
                 pd.DataFrame(columns=expected_kos_cols))
 
-df_gaji, df_jualan, df_kos = muat_data()
+df_gaji_raw, df_jualan_raw, df_kos_raw = muat_data()
 
-# --- 4. PAPARAN APLIKASI SELEPAS LOG MASUK ---
+# --- 4. PROSES DATA UNTUK GRAF ---
+df_gaji_processed = proses_dataframe_bulanan(df_gaji_raw)
+
+# --- 5. PAPARAN APLIKASI SELEPAS LOG MASUK ---
 st.title("Sistem Pengurusan Ladang Sawit 🧑‍🌾")
 
 st.sidebar.title("Navigasi")
-# --- UBAHSUAI 5: TAMBAH HALAMAN BARU ---
 page = st.sidebar.radio("Pilih Halaman:", ["📊 Dashboard Statistik", 
                                           "📝 Kemasukan Data Baru", 
                                           "🖨️ Urus & Cetak Semula", 
-                                          "📈 Laporan Berkelompok"]) # <-- Halaman Baru
-# --- TAMAT UBAHSUAI 5 ---
+                                          "📈 Laporan Berkelompok"])
 
 if st.sidebar.button("Segarkan Semula Data (Refresh)"):
     st.cache_data.clear()
@@ -334,92 +377,150 @@ if st.sidebar.button("Log Masuk Semula"):
 if page == "📊 Dashboard Statistik":
     st.header("📊 Dashboard Statistik")
     
-    df_gaji_paparan = df_gaji.drop(columns=['id', 'created_at'], errors='ignore') if not df_gaji.empty else df_gaji
-    df_jualan_paparan = df_jualan.drop(columns=['id', 'created_at'], errors='ignore') if not df_jualan.empty else df_jualan
-    df_kos_paparan = df_kos.drop(columns=['id', 'created_at'], errors='ignore') if not df_kos.empty else df_kos
-    
-    if df_gaji_paparan.empty:
-        st.warning("Tiada data untuk dipaparkan. Sila ke halaman 'Kemasukan Data Baru' untuk menambah data.")
-    else:
-        # KPI
-        total_sales = df_gaji_paparan['JumlahJualan_RM'].sum()
-        total_weight_kg = df_gaji_paparan['JumlahBerat_kg'].sum()
-        avg_monthly_owner = df_gaji_paparan['BahagianPemilik_RM'].mean()
+    # --- UBAHSUAI 2: Tambah Tabs ---
+    tab_tren, tab_perbandingan = st.tabs(["📈 Tren Keseluruhan", "⚖️ Perbandingan Tahun-ke-Tahun"])
 
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Jumlah Jualan Keseluruhan", f"RM{total_sales:,.2f}")
-        col2.metric("Jumlah Berat Keseluruhan", f"{total_weight_kg:,.0f} kg")
-        col3.metric("Purata Pendapatan Bulanan (Pemilik)", f"RM{avg_monthly_owner:,.2f}")
-        st.markdown("---")
-        
-        # Graf Tren
-        st.subheader("Tren Jualan, Kos, dan Pembahagian Gaji")
-        df_gaji_sorted = df_gaji_paparan.copy()
-        
-        if 'total_kos_operasi' not in df_gaji_sorted.columns:
-            df_gaji_sorted['total_kos_operasi'] = 0.0
-        
-        try:
-            # Blok Pengisihan Graf
-            peta_bulan = {
-                "Januari": 1, "Februari": 2, "Mac": 3, "April": 4, "Mei": 5, "Jun": 6,
-                "Julai": 7, "Ogos": 8, "September": 9, "Oktober": 10, "November": 11, "Disember": 12
-            }
-            df_split = df_gaji_sorted['BulanTahun'].str.split(' ', expand=True)
-            df_gaji_sorted['BulanString'] = df_split[0]
-            df_gaji_sorted['Tahun'] = df_split[1].astype(int)
-            df_gaji_sorted['BulanNombor'] = df_gaji_sorted['BulanString'].map(peta_bulan)
-            df_gaji_sorted = df_gaji_sorted.sort_values(by=['Tahun', 'BulanNombor'])
+    with tab_tren:
+        if df_gaji_processed.empty:
+            st.warning("Tiada data untuk dipaparkan. Sila ke halaman 'Kemasukan Data Baru' untuk menambah data.")
+        else:
+            # KPI
+            total_sales = df_gaji_processed['JumlahJualan_RM'].sum()
+            total_weight_kg = df_gaji_processed['JumlahBerat_kg'].sum()
+            avg_monthly_owner = df_gaji_processed['BahagianPemilik_RM'].mean()
+
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Jumlah Jualan Keseluruhan", f"RM{total_sales:,.2f}")
+            col2.metric("Jumlah Berat Keseluruhan", f"{total_weight_kg:,.0f} kg")
+            col3.metric("Purata Pendapatan Bulanan (Pemilik)", f"RM{avg_monthly_owner:,.2f}")
+            st.markdown("---")
             
-        except Exception as e:
-            st.warning(f"Ralat semasa mengisih graf: {e}. Graf mungkin tidak teratur.")
-            pass 
-            
-        fig_tren_gaji = px.line(
-            df_gaji_sorted, 
-            x='BulanTahun', 
-            y=['JumlahJualan_RM', 'total_kos_operasi', 'GajiLori_RM', 'GajiPenumbak_RM', 'BahagianPemilik_RM'],
-            title="Perbandingan Jualan, Kos, dan Pembahagian Gaji",
-            labels={'value': 'Jumlah (RM)', 'BulanTahun': 'Bulan'},
-            markers=True
-        )
-        st.plotly_chart(fig_tren_gaji, use_container_width=True)
-        
-        # Analisis Pecahan
-        st.subheader("Analisis Pecahan")
-        col_gred1, col_gred2 = st.columns(2)
-        
-        with col_gred1:
-            fig_pie_hasil = px.pie(
-                df_jualan_paparan, names='Gred', values='Hasil_RM', 
-                title="Pecahan Hasil Jualan (RM) mengikut Gred"
+            # Graf Tren
+            st.subheader("Tren Jualan, Kos, dan Keuntungan")
+            df_gaji_sorted = df_gaji_processed.sort_values(by=['Tahun', 'BulanNombor'])
+                
+            fig_tren_gaji = px.line(
+                df_gaji_sorted, 
+                x='BulanTahun', 
+                y=['JumlahJualan_RM', 'total_kos_operasi', 'Keuntungan_RM', 'BahagianPemilik_RM'],
+                title="Perbandingan Jualan, Kos, dan Keuntungan",
+                labels={'value': 'Jumlah (RM)', 'BulanTahun': 'Bulan'},
+                markers=True
             )
-            st.plotly_chart(fig_pie_hasil, use_container_width=True)
-        
-        with col_gred2:
-            if not df_kos_paparan.empty and df_kos_paparan['Jumlah_RM'].sum() > 0:
-                fig_pie_kos = px.pie(
-                    df_kos_paparan, names='JenisKos', values='Jumlah_RM',
-                    title="Pecahan Kos Operasi mengikut Jenis"
+            st.plotly_chart(fig_tren_gaji, use_container_width=True)
+            
+            # Analisis Pecahan
+            st.subheader("Analisis Pecahan")
+            col_gred1, col_gred2 = st.columns(2)
+            
+            df_jualan_paparan = df_jualan_raw.drop(columns=['id', 'created_at'], errors='ignore') if not df_jualan_raw.empty else df_jualan_raw
+            df_kos_paparan = df_kos_raw.drop(columns=['id', 'created_at'], errors='ignore') if not df_kos_raw.empty else df_kos_raw
+
+            with col_gred1:
+                fig_pie_hasil = px.pie(
+                    df_jualan_paparan, names='Gred', values='Hasil_RM', 
+                    title="Pecahan Hasil Jualan (RM) mengikut Gred"
                 )
-                st.plotly_chart(fig_pie_kos, use_container_width=True)
-            else:
-                st.info("Tiada data kos operasi direkodkan.")
+                st.plotly_chart(fig_pie_hasil, use_container_width=True)
+            
+            with col_gred2:
+                if not df_kos_paparan.empty and df_kos_paparan['Jumlah_RM'].sum() > 0:
+                    fig_pie_kos = px.pie(
+                        df_kos_paparan, names='JenisKos', values='Jumlah_RM',
+                        title="Pecahan Kos Operasi mengikut Jenis"
+                    )
+                    st.plotly_chart(fig_pie_kos, use_container_width=True)
+                else:
+                    st.info("Tiada data kos operasi direkodkan.")
+            
+            st.markdown("---")
+            st.subheader("Data Mentah (dari Database)")
+            st.write("Data Gaji (Ringkasan Bulanan)")
+            st.dataframe(df_gaji_raw.drop(columns=['id', 'created_at'], errors='ignore'))
+            st.write("Data Jualan (Butiran Resit)")
+            st.dataframe(df_jualan_raw.drop(columns=['id', 'created_at'], errors='ignore'))
+            st.write("Data Kos Operasi")
+            st.dataframe(df_kos_raw.drop(columns=['id', 'created_at'], errors='ignore'))
+
+    with tab_perbandingan:
+        st.subheader("Perbandingan Prestasi Tahun-ke-Tahun")
         
-        st.markdown("---")
-        st.subheader("Data Mentah (dari Database)")
-        st.write("Data Gaji (Ringkasan Bulanan)")
-        st.dataframe(df_gaji_paparan)
-        st.write("Data Jualan (Butiran Resit)")
-        st.dataframe(df_jualan_paparan)
-        st.write("Data Kos Operasi")
-        st.dataframe(df_kos_paparan)
+        available_years = sorted(df_gaji_processed['Tahun'].unique(), reverse=True)
+        
+        if len(available_years) < 2:
+            st.info("Perlukan sekurang-kurangnya 2 tahun data untuk membuat perbandingan.")
+        else:
+            col_y1, col_y2 = st.columns(2)
+            year_1 = col_y1.selectbox("Pilih Tahun Pertama:", available_years, index=1)
+            year_2 = col_y2.selectbox("Pilih Tahun Kedua:", available_years, index=0)
+
+            if year_1 == year_2:
+                st.error("Sila pilih dua tahun yang berbeza.")
+            else:
+                # Sediakan data
+                peta_bulan_inv = {
+                    1: "Jan", 2: "Feb", 3: "Mac", 4: "Apr", 5: "Mei", 6: "Jun",
+                    7: "Jul", 8: "Ogos", 9: "Sep", 10: "Okt", 11: "Nov", 12: "Dis"
+                }
+                
+                # Data untuk Tahun 1
+                df_y1 = df_gaji_processed[df_gaji_processed['Tahun'] == year_1][['BulanNombor', 'JumlahJualan_RM', 'total_kos_operasi', 'Keuntungan_RM']]
+                df_y1 = df_y1.add_suffix(f"_{year_1}")
+                df_y1.rename(columns={f'BulanNombor_{year_1}': 'BulanNombor'}, inplace=True)
+
+                # Data untuk Tahun 2
+                df_y2 = df_gaji_processed[df_gaji_processed['Tahun'] == year_2][['BulanNombor', 'JumlahJualan_RM', 'total_kos_operasi', 'Keuntungan_RM']]
+                df_y2 = df_y2.add_suffix(f"_{year_2}")
+                df_y2.rename(columns={f'BulanNombor_{year_2}': 'BulanNombor'}, inplace=True)
+                
+                # Gabung (Merge)
+                df_merged = pd.merge(df_y1, df_y2, on='BulanNombor', how='outer').fillna(0)
+                df_merged['Bulan'] = df_merged['BulanNombor'].map(peta_bulan_inv)
+                df_merged = df_merged.sort_values(by='BulanNombor')
+
+                # Graf 1: Jualan
+                fig_jualan = px.bar(
+                    df_merged, 
+                    x='Bulan', 
+                    y=[f'JumlahJualan_RM_{year_1}', f'JumlahJualan_RM_{year_2}'],
+                    barmode='group',
+                    title=f"Perbandingan Jualan Kasar ({year_1} vs {year_2})",
+                    labels={'value': 'Jumlah (RM)', 'variable': 'Tahun'}
+                )
+                st.plotly_chart(fig_jualan, use_container_width=True)
+
+                # Graf 2: Kos
+                fig_kos = px.bar(
+                    df_merged, 
+                    x='Bulan', 
+                    y=[f'total_kos_operasi_{year_1}', f'total_kos_operasi_{year_2}'],
+                    barmode='group',
+                    title=f"Perbandingan Kos Operasi ({year_1} vs {year_2})",
+                    labels={'value': 'Jumlah (RM)', 'variable': 'Tahun'}
+                )
+                st.plotly_chart(fig_kos, use_container_width=True)
+
+                # Graf 3: Keuntungan
+                fig_keuntungan = px.bar(
+                    df_merged, 
+                    x='Bulan', 
+                    y=[f'Keuntungan_RM_{year_1}', f'Keuntungan_RM_{year_2}'],
+                    barmode='group',
+                    title=f"Perbandingan Keuntungan Bersih ({year_1} vs {year_2})",
+                    labels={'value': 'Jumlah (RM)', 'variable': 'Tahun'}
+                )
+                st.plotly_chart(fig_keuntungan, use_container_width=True)
 
 # --- Halaman 2: Kemasukan Data Baru ---
 elif page == "📝 Kemasukan Data Baru":
     st.header("📝 Kemasukan Data Jualan Bulanan Baru")
     
     tab_jualan, tab_kos = st.tabs(["1. Masukkan Jualan (Gaji)", "2. Masukkan Kos Operasi"])
+    senarai_bulan = ["Januari", "Februari", "Mac", "April", "Mei", "Jun", 
+                    "Julai", "Ogos", "September", "Oktober", "November", "Disember"]
+    tahun_semasa = datetime.date.today().year
+    senarai_tahun = list(range(tahun_semasa - 5, tahun_semasa + 2)) 
+    senarai_tahun.reverse()
 
     # --- TAB 1: Borang Jualan dan Gaji ---
     with tab_jualan:
@@ -428,11 +529,6 @@ elif page == "📝 Kemasukan Data Baru":
             
             st.subheader("A. Maklumat Asas")
             col1, col2 = st.columns(2)
-            senarai_bulan = ["Januari", "Februari", "Mac", "April", "Mei", "Jun", 
-                            "Julai", "Ogos", "September", "Oktober", "November", "Disember"]
-            tahun_semasa = datetime.date.today().year
-            senarai_tahun = list(range(tahun_semasa - 5, tahun_semasa + 2)) 
-            senarai_tahun.reverse()
             with col1:
                 bulan_gaji = st.selectbox("Pilih Bulan:", senarai_bulan, index=datetime.date.today().month - 1, key="bulan_gaji") 
             with col2:
@@ -509,7 +605,7 @@ elif page == "📝 Kemasukan Data Baru":
                     kos['BulanTahun'] = bulan_tahun_kos
                 
                 try:
-                    if not df_kos.empty and bulan_tahun_kos in df_kos['BulanTahun'].values:
+                    if not df_kos_raw.empty and bulan_tahun_kos in df_kos_raw['BulanTahun'].values:
                         supabase.table('rekod_kos').delete().eq('BulanTahun', bulan_tahun_kos).execute()
                     
                     supabase.table('rekod_kos').insert(senarai_kos_bersih).execute()
@@ -524,13 +620,13 @@ elif page == "📝 Kemasukan Data Baru":
             st.error("Ralat: Sila pilih Bulan dan Tahun.")
         elif edited_df_jualan['Berat_kg'].sum() == 0:
             st.error("Ralat: Sila masukkan sekurang-kurangnya satu resit jualan.")
-        elif not df_gaji.empty and bulan_tahun_gaji in df_gaji['BulanTahun'].values:
+        elif not df_gaji_raw.empty and bulan_tahun_gaji in df_gaji_raw['BulanTahun'].values:
             st.error(f"Ralat: Data gaji untuk {bulan_tahun_gaji} sudah wujud.")
         else:
             with st.spinner("Sedang mengira dan menyimpan..."):
                 
-                if not df_kos.empty:
-                    kos_bulan_ini = df_kos[df_kos['BulanTahun'] == bulan_tahun_gaji]['Jumlah_RM'].sum()
+                if not df_kos_raw.empty:
+                    kos_bulan_ini = df_kos_raw[df_kos_raw['BulanTahun'] == bulan_tahun_gaji]['Jumlah_RM'].sum()
                 else:
                     kos_bulan_ini = 0.0
                 
@@ -599,10 +695,10 @@ elif page == "📝 Kemasukan Data Baru":
 elif page == "🖨️ Urus & Cetak Semula":
     st.header("🖨️ Urus & Cetak Semula Laporan")
     
-    if df_gaji.empty:
+    if df_gaji_raw.empty:
         st.info("Tiada data untuk diurus atau dicetak.")
     else:
-        senarai_bulan_rekod = df_gaji['BulanTahun'].unique()
+        senarai_bulan_rekod = df_gaji_raw['BulanTahun'].unique()
         
         # BAHAGIAN 1: CETAK SEMULA PDF
         st.subheader("1. Cetak Semula Laporan PDF Bulanan")
@@ -612,8 +708,8 @@ elif page == "🖨️ Urus & Cetak Semula":
 
         if submit_cetak:
             with st.spinner(f"Menjana PDF untuk {bulan_cetak}..."):
-                data_gaji_bulan_ini = df_gaji[df_gaji['BulanTahun'] == bulan_cetak].to_dict('records')[0]
-                senarai_resit = df_jualan[df_jualan['BulanTahun'] == bulan_cetak].to_dict('records')
+                data_gaji_bulan_ini = df_gaji_raw[df_gaji_raw['BulanTahun'] == bulan_cetak].to_dict('records')[0]
+                senarai_resit = df_jualan_raw[df_jualan_raw['BulanTahun'] == bulan_cetak].to_dict('records')
                 
                 data_kiraan_cetak = {
                     'jumlah_hasil_jualan': data_gaji_bulan_ini['JumlahJualan_RM'],
@@ -638,7 +734,7 @@ elif page == "🖨️ Urus & Cetak Semula":
         
         st.divider()
         
-        # BAHAGIAN 2: KEMASKINI DATA (FUNGSI BARU)
+        # BAHAGIAN 2: KEMASKINI DATA
         st.subheader("✏️ 2. Kemaskini Data Bulanan (Edit)")
         st.info("Untuk membetulkan kesilapan, pilih bulan, muatkan data, buat perubahan, dan simpan.")
 
@@ -658,8 +754,8 @@ elif page == "🖨️ Urus & Cetak Semula":
             
             bulan_edit_aktif = st.session_state.bulan_untuk_diedit
             
-            data_jualan_sedia_ada = df_jualan[df_jualan['BulanTahun'] == bulan_edit_aktif][['Gred', 'Berat_kg', 'Harga_RM_per_MT']]
-            data_kos_sedia_ada = df_kos[df_kos['BulanTahun'] == bulan_edit_aktif][['JenisKos', 'Jumlah_RM']]
+            data_jualan_sedia_ada = df_jualan_raw[df_jualan_raw['BulanTahun'] == bulan_edit_aktif][['Gred', 'Berat_kg', 'Harga_RM_per_MT']]
+            data_kos_sedia_ada = df_kos_raw[df_kos_raw['BulanTahun'] == bulan_edit_aktif][['JenisKos', 'Jumlah_RM']]
             
             st.warning(f"Anda sedang mengedit data untuk: **{bulan_edit_aktif}**")
             
@@ -782,21 +878,39 @@ elif page == "🖨️ Urus & Cetak Semula":
                         
                     except Exception as e:
                         st.error(f"RALAT: Gagal memadam data. {e}")
+                        
+        st.divider()
+        
+        # --- UBAHSUAI 3: FUNGSI BACKUP EXCEL BARU ---
+        st.subheader("🗄️ 4. Pengurusan Lanjutan (Backup)")
+        st.info("Muat turun kesemua data mentah anda dari database sebagai fail Excel.")
+        
+        # Sediakan data Excel 'in-memory'
+        excel_data = to_excel(
+            df_gaji_raw.drop(columns=['id', 'created_at'], errors='ignore'), 
+            df_jualan_raw.drop(columns=['id', 'created_at'], errors='ignore'), 
+            df_kos_raw.drop(columns=['id', 'created_at'], errors='ignore')
+        )
+        
+        tarikh_backup = datetime.date.today().strftime("%Y-%m-%d")
+        
+        st.download_button(
+            label="Muat Turun Fail Backup Excel",
+            data=excel_data,
+            file_name=f"backup_ladang_sawit_{tarikh_backup}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        # --- TAMAT UBAHSUAI 3 ---
 
-# --- HALAMAN 4: LAPORAN BERKELOMPOK (FUNGSI BARU) ---
+# --- Halaman 4: Laporan Berkelompok ---
 elif page == "📈 Laporan Berkelompok":
     st.header("📈 Laporan Berkelompok (Separuh Tahun & Tahunan)")
     
-    if df_gaji.empty:
+    if df_gaji_processed.empty:
         st.warning("Tiada data untuk menjana laporan.")
     else:
-        # Dapatkan senarai tahun yang ada dari data
-        try:
-            df_gaji['Tahun'] = df_gaji['BulanTahun'].str.split(' ', expand=True)[1].astype(int)
-            available_years = sorted(df_gaji['Tahun'].unique(), reverse=True)
-        except Exception:
-            st.error("Ralat memproses tahun dari data. Pastikan format 'BulanTahun' betul.")
-            available_years = [] # Elak 'crash'
+        # Gunakan df_gaji_processed untuk dapatkan senarai tahun
+        available_years = sorted(df_gaji_processed['Tahun'].unique(), reverse=True)
 
         if not available_years:
             st.info("Tiada data tahunan untuk diproses.")
@@ -813,7 +927,7 @@ elif page == "📈 Laporan Berkelompok":
 
             if submit_button_laporan:
                 with st.spinner(f"Menjana laporan untuk {report_type} {selected_year}..."):
-                    # 1. Tentukan senarai bulan berdasarkan pilihan
+                    
                     bulan_h1 = ["Januari", "Februari", "Mac", "April", "Mei", "Jun"]
                     bulan_h2 = ["Julai", "Ogos", "September", "Oktober", "November", "Disember"]
                     
@@ -827,18 +941,16 @@ elif page == "📈 Laporan Berkelompok":
                         bulan_list = [f"{b} {selected_year}" for b in (bulan_h1 + bulan_h2)]
                         laporan_title = f"Tahunan Penuh {selected_year}"
 
-                    # 2. Tapis (filter) semua data berdasarkan senarai bulan
-                    df_gaji_filtered = df_gaji[df_gaji['BulanTahun'].isin(bulan_list)]
-                    df_jualan_filtered = df_jualan[df_jualan['BulanTahun'].isin(bulan_list)]
-                    df_kos_filtered = df_kos[df_kos['BulanTahun'].isin(bulan_list)]
+                    # Tapis data mentah
+                    df_gaji_filtered = df_gaji_raw[df_gaji_raw['BulanTahun'].isin(bulan_list)]
+                    df_jualan_filtered = df_jualan_raw[df_jualan_raw['BulanTahun'].isin(bulan_list)]
+                    df_kos_filtered = df_kos_raw[df_kos_raw['BulanTahun'].isin(bulan_list)]
 
                     if df_gaji_filtered.empty:
                         st.error(f"Tiada data ditemui untuk tempoh yang dipilih.")
                     else:
-                        # 3. Jana PDF Berkelompok
                         pdf_binary = jana_pdf_berkelompok(laporan_title, df_gaji_filtered, df_jualan_filtered, df_kos_filtered)
                         
-                        # 4. Sediakan butang muat turun
                         nama_fail_pdf = f"Laporan_{laporan_title.replace(' ', '_')}.pdf"
                         st.download_button(
                             label=f"Muat Turun PDF: {laporan_title}",

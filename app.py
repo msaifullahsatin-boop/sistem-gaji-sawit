@@ -61,15 +61,15 @@ def jana_pdf_binary(bulan_tahun, senarai_resit, data_kiraan):
 
     # Bahagian 2: Kiraan Gaji
     pdf.set_font("Helvetica", 'B', 12)
-    pdf.cell(0, 10, "Bahagian 2: Pengiraan Gaji dan Pembahagian", ln=True)
+    pdf.cell(0, 10, "Bahagian 2: Pengiraan  Pembayaran", ln=True)
     
     # Gaji Lori
     pdf.set_font("Helvetica", 'BU', 11)
-    pdf.cell(0, 8, "Gaji Pekerja 1 (Lori):", ln=True)
+    pdf.cell(0, 8, "Pembayaran (Lori Angkut Sawit):", ln=True)
     pdf.set_font("Helvetica", size=11)
     pdf.cell(0, 8, f"  Kiraan: {data_kiraan.get('jumlah_berat_kg', 0):.2f} kg x RM{data_kiraan.get('kadar_lori_per_kg', 0.07):.2f}/kg", ln=True)
     pdf.set_font("Helvetica", 'B', 11)
-    pdf.cell(0, 8, f"  Jumlah Gaji Lori = RM{data_kiraan.get('gaji_lori', 0):.2f}", ln=True)
+    pdf.cell(0, 8, f"  Lori Angkut Sawit = RM{data_kiraan.get('gaji_lori', 0):.2f}", ln=True)
     pdf.ln(5)
 
     # Kos Operasi
@@ -94,7 +94,7 @@ def jana_pdf_binary(bulan_tahun, senarai_resit, data_kiraan):
     pdf.set_font("Helvetica", size=11)
     pdf.cell(0, 8, f"  Kiraan: RM{data_kiraan.get('baki_bersih', 0):.2f} / 2", ln=True)
     pdf.set_font("Helvetica", 'B', 11)
-    pdf.cell(0, 8, f"  Gaji Pekerja 2 (Penumbak) = RM{data_kiraan.get('gaji_penumbak', 0):.2f}", ln=True)
+    pdf.cell(0, 8, f"  Pembayaran (Penumbak) = RM{data_kiraan.get('gaji_penumbak', 0):.2f}", ln=True)
     pdf.cell(0, 8, f"  Bahagian Pemilik Ladang = RM{data_kiraan.get('bahagian_pemilik', 0):.2f}", ln=True)
     pdf.ln(15)
     
@@ -524,7 +524,7 @@ elif page == "📝 Kemasukan Data Baru":
 
     # --- TAB 1: Borang Jualan dan Gaji ---
     with tab_jualan:
-        st.subheader("Borang Kiraan Gaji")
+        st.subheader("Borang Kiraan Pembayaran")
         with st.form("borang_data_gaji"):
             
             st.subheader("A. Maklumat Asas")
@@ -958,3 +958,4 @@ elif page == "📈 Laporan Berkelompok":
                             file_name=nama_fail_pdf,
                             mime="application/pdf"
                         )
+

@@ -38,7 +38,7 @@ def jana_pdf_binary(bulan_tahun, senarai_resit, data_kiraan):
     pdf.set_font("Helvetica", 'B', 18)
     pdf.cell(0, 10, f"LADANG SAWIT SATIN LUNG MANIS", ln=True, align='C')
     pdf.set_font("Helvetica", 'B', 14)
-    pdf.cell(0, 10, f"Laporan Kiraan Gaji - {bulan_tahun}", ln=True, align='C')
+    pdf.cell(0, 10, f"Laporan Kiraan Pembayaran - {bulan_tahun}", ln=True, align='C')
     pdf.ln(10)
     
     # Bahagian 1: Jualan
@@ -958,4 +958,5 @@ elif page == "📈 Laporan Berkelompok":
                             file_name=nama_fail_pdf,
                             mime="application/pdf"
                         )
+
 

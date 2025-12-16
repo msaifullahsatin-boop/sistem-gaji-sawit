@@ -11,4 +11,4 @@ jobs:
     steps:
       - name: Ping URL
         run: |
-          curl -I https://sawitbeluran.streamlit.app/_stcore/health
+          curl -I https://sawitbeluran.streamlit.app/_stcore/health 

@@ -1,12 +1,8 @@
 name: Jaga Sistem Sawit
 
 on:
-  # Jadual: Berjalan setiap jam 8 pagi UTC (setiap hari)
-  # Kita buat setiap hari supaya database PASTI tidak tidur
   schedule:
     - cron: '0 8 * * *'
-  
-  # Benarkan kita tekan butang "Run" secara manual untuk test
   workflow_dispatch:
 
 jobs:
@@ -14,6 +10,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Ping Aplikasi Streamlit
-        # Menggunakan curl untuk melawat link health check
-        # Kita letak User-Agent supaya Streamlit tidak ingat kita bot jahat
         run: curl -I -H "User-Agent: Mozilla/5.0" https://sawitbeluran.streamlit.app/_stcore/health

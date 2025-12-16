@@ -10,5 +10,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Ping URL
-        run: |
-          curl -I https://sawitbeluran.streamlit.app/_stcore/health 
+        run: curl -I https://sawitbeluran.streamlit.app/_stcore/health

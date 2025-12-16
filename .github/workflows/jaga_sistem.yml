@@ -6,8 +6,9 @@ on:
   workflow_dispatch:
 
 jobs:
-  wake_up:
+  ping_job:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping Aplikasi Streamlit
-        run: curl -I -H "User-Agent: Mozilla/5.0" https://sawitbeluran.streamlit.app/_stcore/health
+      - name: Ping URL
+        run: |
+          curl -I https://sawitbeluran.streamlit.app/_stcore/health

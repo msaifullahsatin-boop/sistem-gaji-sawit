@@ -9,7 +9,7 @@ from supabase import create_client, Client
 import openpyxl # Pastikan ini ada dalam requirements.txt
 
 # --- TETAPAN HALAMAN (MESTI DI ATAS SEKALI) ---
-st.set_page_config(layout="wide", page_title="Sistem Gaji Sawit")
+st.set_page_config(layout="wide", page_title="Sistem Pengiraan Pembayaran Sawit Beluran")
 
 # ==============================================================================
 # 1. SAMBUNGAN KE SUPABASE (DIPINDAHKAN KE ATAS)
@@ -96,7 +96,7 @@ def jana_pdf_binary(bulan_tahun, senarai_resit, data_kiraan):
     pdf.set_font("Helvetica", 'B', 18)
     pdf.cell(0, 10, f"LADANG SAWIT SATIN LUNG MANIS", ln=True, align='C')
     pdf.set_font("Helvetica", 'B', 14)
-    pdf.cell(0, 10, f"Laporan Kiraan Gaji - {bulan_tahun}", ln=True, align='C')
+    pdf.cell(0, 10, f"Laporan Kiraan Pembayaran - {bulan_tahun}", ln=True, align='C')
     pdf.ln(10)
     
     # Bahagian 1: Jualan
@@ -119,15 +119,15 @@ def jana_pdf_binary(bulan_tahun, senarai_resit, data_kiraan):
 
     # Bahagian 2: Kiraan Gaji
     pdf.set_font("Helvetica", 'B', 12)
-    pdf.cell(0, 10, "Bahagian 2: Pengiraan Gaji dan Pembahagian", ln=True)
+    pdf.cell(0, 10, "Bahagian 2: Pengiraan Pembayaran dan Pembahagian", ln=True)
     
     # Gaji Lori
     pdf.set_font("Helvetica", 'BU', 11)
-    pdf.cell(0, 8, "Gaji Pekerja 1 (Lori):", ln=True)
+    pdf.cell(0, 8, "Pembayaran Mengangkut Sawit (Lori):", ln=True)
     pdf.set_font("Helvetica", size=11)
     pdf.cell(0, 8, f"  Kiraan: {data_kiraan.get('jumlah_berat_kg', 0):.2f} kg x RM{data_kiraan.get('kadar_lori_per_kg', 0.07):.2f}/kg", ln=True)
     pdf.set_font("Helvetica", 'B', 11)
-    pdf.cell(0, 8, f"  Jumlah Gaji Lori = RM{data_kiraan.get('gaji_lori', 0):.2f}", ln=True)
+    pdf.cell(0, 8, f"  Jumlah Bayaran Angkut Sawit (Lori) = RM{data_kiraan.get('gaji_lori', 0):.2f}", ln=True)
     pdf.ln(5)
 
     # Kos Operasi
@@ -152,7 +152,7 @@ def jana_pdf_binary(bulan_tahun, senarai_resit, data_kiraan):
     pdf.set_font("Helvetica", size=11)
     pdf.cell(0, 8, f"  Kiraan: RM{data_kiraan.get('baki_bersih', 0):.2f} / 2", ln=True)
     pdf.set_font("Helvetica", 'B', 11)
-    pdf.cell(0, 8, f"  Gaji Pekerja 2 (Penumbak) = RM{data_kiraan.get('gaji_penumbak', 0):.2f}", ln=True)
+    pdf.cell(0, 8, f"  Pembayaran Pekerja (Penumbak) = RM{data_kiraan.get('gaji_penumbak', 0):.2f}", ln=True)
     pdf.cell(0, 8, f"  Bahagian Pemilik Ladang = RM{data_kiraan.get('bahagian_pemilik', 0):.2f}", ln=True)
     pdf.ln(15)
     
@@ -808,3 +808,4 @@ elif page == "📈 Laporan Berkelompok":
                 else:
                     pdf = jana_pdf_berkelompok(ttl, d_g, d_j, d_k)
                     st.download_button(f"Muat Turun {ttl}", pdf, f"Laporan_{ttl.replace(' ', '_')}.pdf", "application/pdf")
+
